@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, ScanCommand, UpdateCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const REGION = process.env.AWS_REGION || 'us-east-2';
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }), { marshallOptions: { removeUndefinedValues: true } });
 
@@ -41,6 +41,7 @@ exports.handler = async (event) => {
     const requestBody = body ? JSON.parse(body) : {};
     const params = queryStringParameters || {};
     const driversTable = process.env.DYNAMO_DRIVERS_TABLE || 'Drivers';
+    const statusIndex = process.env.DYNAMO_DRIVERS_BY_STATUS_INDEX || 'status-index';
 
     switch (`${httpMethod}:${path}`) {
       case "GET:/drivers/available": {
@@ -53,13 +54,27 @@ exports.handler = async (event) => {
           });
         }
 
-        const scanRes = await ddb.send(new ScanCommand({
-          TableName: driversTable,
-          FilterExpression: "#st = :s AND is_active = :a",
-          ExpressionAttributeNames: { "#st": "status" },
-          ExpressionAttributeValues: { ":s": 'available', ":a": true },
-        }));
-        const drivers = scanRes.Items || [];
+        let drivers = [];
+        try {
+          const queryRes = await ddb.send(new QueryCommand({
+            TableName: driversTable,
+            IndexName: statusIndex,
+            KeyConditionExpression: '#st = :s',
+            FilterExpression: 'is_active = :a',
+            ExpressionAttributeNames: { '#st': 'status' },
+            ExpressionAttributeValues: { ':s': 'available', ':a': true },
+          }));
+          drivers = queryRes.Items || [];
+        } catch (e) {
+          // Fallback to scan if index is not present
+          const scanRes = await ddb.send(new ScanCommand({
+            TableName: driversTable,
+            FilterExpression: '#st = :s AND is_active = :a',
+            ExpressionAttributeNames: { '#st': 'status' },
+            ExpressionAttributeValues: { ':s': 'available', ':a': true },
+          }));
+          drivers = scanRes.Items || [];
+        }
 
         // Filter drivers by distance
         const nearbyDrivers = drivers
