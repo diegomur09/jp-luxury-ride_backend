@@ -33,12 +33,12 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
+    - name: Install dependencies (with dev)
       run: |
-        cd lambda/auth && npm ci
-        cd ../bookings && npm ci
-        cd ../payments && npm ci
-        cd ../drivers && npm ci
+        cd lambda/auth && npm ci --include=dev
+        cd ../bookings && npm ci --include=dev
+        cd ../payments && npm ci --include=dev
+        cd ../drivers && npm ci --include=dev
     
     - name: Run linting
       run: |
