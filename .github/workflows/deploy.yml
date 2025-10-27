@@ -145,11 +145,19 @@ jobs:
 
       - name: Deploy CloudFormation Stack
         run: |
+          # Map workflow input to template AllowedValues [dev, staging, prod]
+          INPUT_ENV="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'production' }}"
+          case "$INPUT_ENV" in
+            production) CF_ENV=prod ;;
+            staging) CF_ENV=staging ;;
+            *) CF_ENV=dev ;;
+          esac
+
           aws cloudformation deploy \
             --template-file aws-deployment/infrastructure.yaml \
             --stack-name jp-luxury-ride-backend \
             --parameter-overrides \
-              Environment=production \
+              Environment=$CF_ENV \
               ProjectName=jp-luxury-ride \
             --capabilities CAPABILITY_IAM \
             --region ${{ env.AWS_REGION }}
