@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+.npm
+.yarn
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.aws
+
+# AWS credentials (security)
+.aws/
+aws-config
+
+# Credentials backups
+*.backup
+.aws/credentials.backup
+.aws/config.backup
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Database
+prisma/migrations/
+*.db
+*.db-journal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

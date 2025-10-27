@@ -1,0 +1,271 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DriverStatus {
+  OFFLINE
+  AVAILABLE
+  BUSY
+  ON_TRIP
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum VehicleType {
+  SEDAN
+  SUV
+  LUXURY
+  VAN
+  LIMOUSINE
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  phone       String?  @unique
+  firstName   String
+  lastName    String
+  avatar      String?
+  role        Role     @default(CUSTOMER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  customerBookings Booking[] @relation("CustomerBookings")
+  driverProfile    Driver?
+  addresses        Address[]
+  payments         Payment[]
+  reviews          Review[]  @relation("ReviewsGiven")
+  receivedReviews  Review[]  @relation("ReviewsReceived")
+
+  @@map("users")
+}
+
+model Address {
+  id           String  @id @default(uuid())
+  userId       String
+  label        String? // "Home", "Work", etc.
+  street       String
+  city         String
+  state        String
+  zipCode      String
+  country      String  @default("US")
+  latitude     Float?
+  longitude    Float?
+  isDefault    Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pickupBookings      Booking[] @relation("PickupAddress")
+  dropoffBookings     Booking[] @relation("DropoffAddress")
+
+  @@map("addresses")
+}
+
+model Vehicle {
+  id           String      @id @default(uuid())
+  make         String
+  model        String
+  year         Int
+  color        String
+  licensePlate String      @unique
+  type         VehicleType
+  capacity     Int         @default(4)
+  pricePerMile Float
+  pricePerHour Float
+  features     String[]    // JSON array of features
+  images       String[]    // JSON array of image URLs
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  drivers  Driver[]
+  bookings Booking[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id            String       @id @default(uuid())
+  userId        String       @unique
+  licenseNumber String       @unique
+  vehicleId     String?
+  status        DriverStatus @default(OFFLINE)
+  rating        Float        @default(0.0)
+  totalTrips    Int          @default(0)
+  totalEarnings Float        @default(0.0)
+  currentLat    Float?
+  currentLng    Float?
+  isVerified    Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle?  @relation(fields: [vehicleId], references: [id])
+  bookings Booking[] @relation("DriverBookings")
+
+  @@map("drivers")
+}
+
+model Booking {
+  id               String        @id @default(uuid())
+  customerId       String
+  driverId         String?
+  vehicleId        String
+  pickupAddressId  String
+  dropoffAddressId String
+  
+  // Trip details
+  scheduledAt      DateTime
+  pickupTime       DateTime?
+  dropoffTime      DateTime?
+  distance         Float?        // in miles
+  duration         Int?          // in minutes
+  
+  // Pricing
+  baseFare         Float
+  distanceFare     Float         @default(0.0)
+  timeFare         Float         @default(0.0)
+  surcharge        Float         @default(0.0)
+  tip              Float         @default(0.0)
+  totalAmount      Float
+  
+  // Status and metadata
+  status           BookingStatus @default(PENDING)
+  notes            String?
+  specialRequests  String?
+  route            Json?         // Store route data as JSON
+  
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  customer       User    @relation("CustomerBookings", fields: [customerId], references: [id])
+  driver         Driver? @relation("DriverBookings", fields: [driverId], references: [id])
+  vehicle        Vehicle @relation(fields: [vehicleId], references: [id])
+  pickupAddress  Address @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  dropoffAddress Address @relation("DropoffAddress", fields: [dropoffAddressId], references: [id])
+  
+  payment Payment?
+  review  Review?
+  stops   BookingStop[]
+
+  @@map("bookings")
+}
+
+model BookingStop {
+  id          String  @id @default(uuid())
+  bookingId   String
+  address     String
+  latitude    Float
+  longitude   Float
+  order       Int     // Order of the stop
+  completed   Boolean @default(false)
+  arrivedAt   DateTime?
+  departedAt  DateTime?
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_stops")
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  bookingId         String        @unique
+  userId            String
+  provider          String        @default("stripe") // "stripe", "square", "cash"
+  stripePaymentId   String?       @unique
+  squarePaymentId   String?       @unique
+  amount            Float
+  currency          String        @default("usd")
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     String?       // "card", "cash", "apple_pay", etc.
+  transactionFee    Float         @default(0.0)
+  processingFee     Float         @default(0.0)
+  refundAmount      Float         @default(0.0)
+  metadata          Json?         // Additional payment provider data
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("payments")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  reviewerId String
+  revieweeId String
+  rating     Int      // 1-5 stars
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  booking  Booking @relation(fields: [bookingId], references: [id])
+  reviewer User    @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewee User    @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+
+  @@map("reviews")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // "booking", "payment", "system", etc.
+  isRead    Boolean  @default(false)
+  data      Json?    // Additional data as JSON
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AppSettings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("app_settings")
+}
