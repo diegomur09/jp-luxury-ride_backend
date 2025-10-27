@@ -146,7 +146,7 @@ jobs:
       - name: Deploy CloudFormation Stack
         run: |
           aws cloudformation deploy \
-            --template-file infrastructure/cloudformation-template.yaml \
+            --template-file aws-deployment/infrastructure.yaml \
             --stack-name jp-luxury-ride-backend \
             --parameter-overrides \
               Environment=production \
