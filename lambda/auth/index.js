@@ -3,18 +3,22 @@ const bcrypt = require("bcryptjs");
 const { randomUUID } = require("crypto");
 const { getUserByEmail, putUser } = require("./dynamo");
 
-// CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Content-Type": "application/json",
+// CORS headers (dynamic)
+const getCorsHeaders = (event) => {
+  const origin = event?.headers?.origin || event?.headers?.Origin;
+  const allowOrigin = process.env.CORS_ORIGIN || origin || "*";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Content-Type": "application/json",
+  };
 };
 
 // Standard response helper
-const createResponse = (statusCode, body) => ({
+const createResponse = (statusCode, body, event) => ({
   statusCode,
-  headers: corsHeaders,
+  headers: getCorsHeaders(event),
   body: JSON.stringify(body),
 });
 
@@ -34,7 +38,7 @@ exports.handler = async (event) => {
 
   // Handle OPTIONS request for CORS
   if (event.httpMethod === "OPTIONS") {
-    return createResponse(200, { message: "CORS preflight" });
+    return createResponse(200, { message: "CORS preflight" }, event);
   }
 
   try {
