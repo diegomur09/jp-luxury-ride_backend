@@ -1,3 +1,4 @@
+<!-- Trigger workflow: trivial change -->
 # Frontend Integration Guide
 
 ## 🔗 Backend Integration Options
