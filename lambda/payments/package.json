@@ -10,9 +10,9 @@
   "dependencies": {
     "stripe": "^14.5.0",
     "square": "^43.2.0",
-    "@supabase/supabase-js": "^2.38.0",
     "@aws-sdk/client-dynamodb": "^3.659.0",
-    "@aws-sdk/lib-dynamodb": "^3.659.0"
+    "@aws-sdk/lib-dynamodb": "^3.659.0",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "jest": "^29.0.0",

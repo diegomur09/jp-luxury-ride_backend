@@ -4,7 +4,8 @@
   "description": "Driver management Lambda function",
   "main": "index.js",
   "dependencies": {
-    "@supabase/supabase-js": "^2.38.0"
+    "@aws-sdk/client-dynamodb": "^3.659.0",
+    "@aws-sdk/lib-dynamodb": "^3.659.0"
   },
   "scripts": {
     "test": "jest --passWithNoTests"

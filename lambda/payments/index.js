@@ -1,12 +1,8 @@
 const Stripe = require("stripe");
 const { Client, Environment } = require("square");
-const { createClient } = require("@supabase/supabase-js");
+const jwt = require("jsonwebtoken");
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const { logPaymentEvent } = require('./dynamo');
 
 // Initialize payment processors
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -225,21 +221,7 @@ const paymentService = {
           throw new Error(`Unknown payment processor: ${processor}`);
       }
 
-      // Log transaction to database
-      const { data: transaction } = await supabase
-        .from("payment_transactions")
-        .insert({
-          transaction_id: result.id,
-          processor: result.processor,
-          amount: result.amount,
-          currency: result.currency || "USD",
-          status: result.status,
-          metadata: params.metadata || {},
-        })
-        .select()
-        .single();
-
-      return { ...result, dbId: transaction?.id };
+      return result;
     } catch (error) {
       console.error(`Payment processing error (${processor}):`, error);
       throw error;
@@ -247,7 +229,7 @@ const paymentService = {
   },
 };
 
-const { logPaymentEvent } = require('./dynamo');
+// dynamo logger imported above
 
 // Main Lambda handler
 exports.handler = async (event) => {
@@ -268,19 +250,18 @@ exports.handler = async (event) => {
       event.headers?.Authorization || event.headers?.authorization;
     const token = authHeader?.replace("Bearer ", "");
 
-    // Verify user authentication for protected endpoints
+    // Verify user authentication for protected endpoints (JWT)
     if (token) {
-      const { data: user, error } = await supabase.auth.getUser(token);
-      if (error || !user) {
-        return createResponse(401, {
-          success: false,
-          error: "Invalid authentication token",
-        });
+      try {
+        const claims = jwt.verify(token, process.env.JWT_SECRET);
+        requestBody.userId = claims.uid || claims.sub || null;
+      } catch (e) {
+        return createResponse(401, { success: false, error: "Invalid authentication token" });
       }
-      requestBody.userId = user.user.id;
     }
 
     // Route handling
+    const paymentsLogTable = process.env.DYNAMO_PAYMENTS_TABLE;
     const paymentsLogTable = process.env.DYNAMO_PAYMENTS_TABLE;
     switch (`${httpMethod}:${path}`) {
       // Create Stripe Payment Intent
@@ -305,6 +286,18 @@ exports.handler = async (event) => {
         );
 
         // Log to DynamoDB (non-blocking)
+        logPaymentEvent(paymentsLogTable, {
+          pk: `BOOKING#${bookingId || 'unknown'}`,
+          sk: `STRIPE_INTENT#${stripeIntent?.id || 'unknown'}`,
+          processor: 'stripe',
+          action: 'create_intent',
+          amount,
+          currency,
+          userId: requestBody.userId || null,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+
+        // Log to Dynamo (best-effort)
         logPaymentEvent(paymentsLogTable, {
           pk: `BOOKING#${bookingId || 'unknown'}`,
           sk: `STRIPE_INTENT#${stripeIntent?.id || 'unknown'}`,
@@ -341,6 +334,15 @@ exports.handler = async (event) => {
             paymentIntentId,
           }
         );
+
+        logPaymentEvent(paymentsLogTable, {
+          pk: `INTENT#${paymentIntentId}`,
+          sk: `CONFIRM#${new Date().toISOString()}`,
+          processor: 'stripe',
+          action: 'confirm',
+          userId: requestBody.userId || null,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
 
         logPaymentEvent(paymentsLogTable, {
           pk: `INTENT#${paymentIntentId}`,
@@ -411,6 +413,19 @@ exports.handler = async (event) => {
           timestamp: new Date().toISOString(),
         }).catch(() => {});
 
+        logPaymentEvent(paymentsLogTable, {
+          pk: `BOOKING#${sqBookingId || 'unknown'}`,
+          sk: `SQUARE_PAYMENT#${squarePayment?.id || squarePayment?.payment?.id || 'unknown'}`,
+          processor: 'square',
+          action: 'create_payment',
+          amount: sqAmount,
+          currency: 'USD',
+          description: description || null,
+          userId: requestBody.userId || null,
+          locationId: locationId || null,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+
         return createResponse(200, {
           success: true,
           data: squarePayment,
@@ -460,6 +475,17 @@ exports.handler = async (event) => {
             error: "Invalid processor specified",
           });
         }
+
+        logPaymentEvent(paymentsLogTable, {
+          pk: `PAYMENT#${paymentId}`,
+          sk: `REFUND#${new Date().toISOString()}`,
+          processor,
+          action: 'refund',
+          amount: refundAmount || null,
+          reason: reason || null,
+          userId: requestBody.userId || null,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
 
         logPaymentEvent(paymentsLogTable, {
           pk: `PAYMENT#${paymentId}`,
