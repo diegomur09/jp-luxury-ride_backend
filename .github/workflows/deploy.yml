@@ -1,0 +1,214 @@
+name: 🚀 Deploy JP Luxury Ride Backend
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  AWS_REGION: us-east-2
+  NODE_VERSION: '18.x'
+
+jobs:
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd lambda/auth && npm ci
+        cd ../bookings && npm ci
+        cd ../payments && npm ci
+        cd ../drivers && npm ci
+    
+    - name: Run linting
+      run: |
+        cd lambda/auth && npm run lint --if-present
+        cd ../bookings && npm run lint --if-present
+        cd ../payments && npm run lint --if-present
+        cd ../drivers && npm run lint --if-present
+    
+    - name: Run tests
+      run: |
+        cd lambda/auth && npm test --if-present
+        cd ../bookings && npm test --if-present
+        cd ../payments && npm test --if-present
+        cd ../drivers && npm test --if-present
+
+  deploy-backend:
+    name: 🏗️ Deploy Lambda Functions
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      matrix:
+        function: [auth, bookings, payments, drivers]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+    
+    - name: Package and Deploy Lambda Function
+      run: |
+        cd lambda/${{ matrix.function }}
+        zip -r ${{ matrix.function }}-function.zip . -x "*.git*" "node_modules/.cache/*"
+        
+        aws lambda update-function-code \
+          --function-name jp-luxury-ride-${{ matrix.function }} \
+          --zip-file fileb://${{ matrix.function }}-function.zip \
+          --region ${{ env.AWS_REGION }} || \
+        aws lambda create-function \
+          --function-name jp-luxury-ride-${{ matrix.function }} \
+          --runtime nodejs18.x \
+          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --handler index.handler \
+          --zip-file fileb://${{ matrix.function }}-function.zip \
+          --timeout 30 \
+          --memory-size 256 \
+          --environment Variables="{
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }},
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }},
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},
+            STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},
+            JWT_SECRET=${{ secrets.JWT_SECRET }},
+            CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+          }" \
+          --region ${{ env.AWS_REGION }}
+
+  deploy-infrastructure:
+    name: 🏗️ Deploy Infrastructure
+    needs: [test, deploy-backend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy CloudFormation Stack
+      run: |
+        aws cloudformation deploy \
+          --template-file infrastructure/cloudformation-template.yaml \
+          --stack-name jp-luxury-ride-backend \
+          --parameter-overrides \
+            Environment=production \
+            ProjectName=jp-luxury-ride \
+          --capabilities CAPABILITY_IAM \
+          --region ${{ env.AWS_REGION }}
+
+  update-api-gateway:
+    name: 🌐 Update API Gateway
+    needs: [deploy-backend, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy API Gateway Configuration
+      run: |
+        # Get the API Gateway ID
+        API_ID=$(aws apigateway get-rest-apis --query 'items[?name==`jp-luxury-ride-api`].id' --output text --region ${{ env.AWS_REGION }})
+        
+        if [ -z "$API_ID" ] || [ "$API_ID" == "None" ]; then
+          echo "Creating new API Gateway..."
+          API_ID=$(aws apigateway create-rest-api --name jp-luxury-ride-api --description "JP Luxury Ride Backend API" --query 'id' --output text --region ${{ env.AWS_REGION }})
+        fi
+        
+        echo "API Gateway ID: $API_ID"
+        echo "API_GATEWAY_ID=$API_ID" >> $GITHUB_ENV
+        
+        # Deploy the API
+        aws apigateway create-deployment \
+          --rest-api-id $API_ID \
+          --stage-name prod \
+          --description "Production deployment $(date)" \
+          --region ${{ env.AWS_REGION }}
+
+  notify:
+    name: 📢 Notify Deployment Status  
+    needs: [deploy-backend, deploy-infrastructure, update-api-gateway]
+    runs-on: ubuntu-latest
+    if: always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    
+    steps:
+    - name: Notify Success
+      if: needs.deploy-backend.result == 'success' && needs.deploy-infrastructure.result == 'success' && needs.update-api-gateway.result == 'success'
+      run: |
+        echo "🎉 Deployment successful!"
+        echo "✅ Lambda functions deployed"
+        echo "✅ Infrastructure updated"
+        echo "✅ API Gateway configured"
+        echo "🔗 API URL: https://${{ env.API_GATEWAY_ID }}.execute-api.${{ env.AWS_REGION }}.amazonaws.com/prod"
+    
+    - name: Notify Failure
+      if: needs.deploy-backend.result == 'failure' || needs.deploy-infrastructure.result == 'failure' || needs.update-api-gateway.result == 'failure'
+      run: |
+        echo "❌ Deployment failed!"
+        echo "Backend Status: ${{ needs.deploy-backend.result }}"
+        echo "Infrastructure Status: ${{ needs.deploy-infrastructure.result }}"
+        echo "API Gateway Status: ${{ needs.update-api-gateway.result }}"
+
+  cleanup:
+    name: 🧹 Cleanup Resources
+    runs-on: ubuntu-latest
+    if: failure() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Cleanup Failed Resources
+      run: |
+        echo "🧹 Cleaning up failed deployment resources..."
+        # Add cleanup logic here if needed
+        echo "Cleanup completed."
