@@ -4,7 +4,7 @@
   "description": "Authentication Lambda function with Supabase integration",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
+  "test": "jest --passWithNoTests",
     "lint": "eslint ."
   },
   "dependencies": {

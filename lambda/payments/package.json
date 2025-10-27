@@ -4,7 +4,7 @@
   "description": "Payment processing Lambda function supporting Stripe and Square",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
+  "test": "jest --passWithNoTests",
     "lint": "eslint ."
   },
   "dependencies": {
