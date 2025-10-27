@@ -262,7 +262,6 @@ exports.handler = async (event) => {
 
     // Route handling
     const paymentsLogTable = process.env.DYNAMO_PAYMENTS_TABLE;
-    const paymentsLogTable = process.env.DYNAMO_PAYMENTS_TABLE;
     switch (`${httpMethod}:${path}`) {
       // Create Stripe Payment Intent
       case "POST:/stripe/create-intent": {
@@ -284,18 +283,6 @@ exports.handler = async (event) => {
             metadata: { bookingId, userId: requestBody.userId },
           }
         );
-
-        // Log to DynamoDB (non-blocking)
-        logPaymentEvent(paymentsLogTable, {
-          pk: `BOOKING#${bookingId || 'unknown'}`,
-          sk: `STRIPE_INTENT#${stripeIntent?.id || 'unknown'}`,
-          processor: 'stripe',
-          action: 'create_intent',
-          amount,
-          currency,
-          userId: requestBody.userId || null,
-          timestamp: new Date().toISOString(),
-        }).catch(() => {});
 
         // Log to Dynamo (best-effort)
         logPaymentEvent(paymentsLogTable, {
@@ -413,19 +400,6 @@ exports.handler = async (event) => {
           timestamp: new Date().toISOString(),
         }).catch(() => {});
 
-        logPaymentEvent(paymentsLogTable, {
-          pk: `BOOKING#${sqBookingId || 'unknown'}`,
-          sk: `SQUARE_PAYMENT#${squarePayment?.id || squarePayment?.payment?.id || 'unknown'}`,
-          processor: 'square',
-          action: 'create_payment',
-          amount: sqAmount,
-          currency: 'USD',
-          description: description || null,
-          userId: requestBody.userId || null,
-          locationId: locationId || null,
-          timestamp: new Date().toISOString(),
-        }).catch(() => {});
-
         return createResponse(200, {
           success: true,
           data: squarePayment,
@@ -475,17 +449,6 @@ exports.handler = async (event) => {
             error: "Invalid processor specified",
           });
         }
-
-        logPaymentEvent(paymentsLogTable, {
-          pk: `PAYMENT#${paymentId}`,
-          sk: `REFUND#${new Date().toISOString()}`,
-          processor,
-          action: 'refund',
-          amount: refundAmount || null,
-          reason: reason || null,
-          userId: requestBody.userId || null,
-          timestamp: new Date().toISOString(),
-        }).catch(() => {});
 
         logPaymentEvent(paymentsLogTable, {
           pk: `PAYMENT#${paymentId}`,
