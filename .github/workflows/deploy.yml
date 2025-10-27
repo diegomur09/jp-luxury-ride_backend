@@ -102,6 +102,10 @@ jobs:
             SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},
             STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},
+            SQUARE_ACCESS_TOKEN=${{ secrets.SQUARE_ACCESS_TOKEN }},
+            SQUARE_APPLICATION_ID=${{ secrets.SQUARE_APPLICATION_ID }},
+            SQUARE_LOCATION_ID=${{ secrets.SQUARE_LOCATION_ID }},
+            SQUARE_ENVIRONMENT=${{ secrets.SQUARE_ENVIRONMENT }},
             JWT_SECRET=${{ secrets.JWT_SECRET }},
             CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
           }" \

@@ -1,0 +1,9 @@
+{
+  "name": "drivers-lambda",
+  "version": "1.0.0",
+  "description": "Driver management Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  }
+}
