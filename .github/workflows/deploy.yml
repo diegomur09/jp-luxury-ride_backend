@@ -159,7 +159,7 @@ jobs:
             --parameter-overrides \
               Environment=$CF_ENV \
               ProjectName=jp-luxury-ride \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --region ${{ env.AWS_REGION }}
 
   update-api-gateway:
