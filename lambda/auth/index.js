@@ -1,5 +1,4 @@
 const { createClient } = require('@supabase/supabase-js');
-const jwt = require('jsonwebtoken');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -49,16 +48,14 @@ exports.handler = async (event) => {
     switch (`${httpMethod}:${path}`) {
       
       // User registration
-      case 'POST:/register':
+      case 'POST:/register': {
         const { email, password, firstName, lastName, phone } = requestBody;
-        
         if (!email || !password || !firstName || !lastName) {
           return createResponse(400, {
             success: false,
             error: 'Email, password, first name, and last name are required'
           });
         }
-        
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -70,14 +67,12 @@ exports.handler = async (event) => {
             }
           }
         });
-        
         if (signUpError) {
           return createResponse(400, {
             success: false,
             error: signUpError.message
           });
         }
-        
         return createResponse(201, {
           success: true,
           data: {
@@ -86,30 +81,27 @@ exports.handler = async (event) => {
           },
           message: 'User registered successfully'
         });
+      }
       
       // User login
-      case 'POST:/login':
+      case 'POST:/login': {
         const { email: loginEmail, password: loginPassword } = requestBody;
-        
         if (!loginEmail || !loginPassword) {
           return createResponse(400, {
             success: false,
             error: 'Email and password are required'
           });
         }
-        
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: loginEmail,
           password: loginPassword
         });
-        
         if (signInError) {
           return createResponse(401, {
             success: false,
             error: signInError.message
           });
         }
-        
         return createResponse(200, {
           success: true,
           data: {
@@ -119,29 +111,26 @@ exports.handler = async (event) => {
           },
           message: 'Login successful'
         });
+      }
       
       // Token refresh
-      case 'POST:/refresh':
+      case 'POST:/refresh': {
         const { refreshToken } = requestBody;
-        
         if (!refreshToken) {
           return createResponse(400, {
             success: false,
             error: 'Refresh token is required'
           });
         }
-        
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
           refresh_token: refreshToken
         });
-        
         if (refreshError) {
           return createResponse(401, {
             success: false,
             error: refreshError.message
           });
         }
-        
         return createResponse(200, {
           success: true,
           data: {
@@ -150,54 +139,48 @@ exports.handler = async (event) => {
           },
           message: 'Token refreshed successfully'
         });
+      }
       
       // User logout
-      case 'POST:/logout':
+      case 'POST:/logout': {
         const authHeader = event.headers?.Authorization || event.headers?.authorization;
         const token = authHeader?.replace('Bearer ', '');
-        
         if (!token) {
           return createResponse(400, {
             success: false,
             error: 'Authorization token is required'
           });
         }
-        
         const { error: signOutError } = await supabase.auth.signOut(token);
-        
         if (signOutError) {
           return createResponse(400, {
             success: false,
             error: signOutError.message
           });
         }
-        
         return createResponse(200, {
           success: true,
           message: 'Logout successful'
         });
+      }
       
       // Get user profile
-      case 'GET:/profile':
+      case 'GET:/profile': {
         const profileAuthHeader = event.headers?.Authorization || event.headers?.authorization;
         const profileToken = profileAuthHeader?.replace('Bearer ', '');
-        
         if (!profileToken) {
           return createResponse(401, {
             success: false,
             error: 'Authorization token is required'
           });
         }
-        
         const { data: userData, error: userError } = await supabase.auth.getUser(profileToken);
-        
         if (userError || !userData.user) {
           return createResponse(401, {
             success: false,
             error: 'Invalid or expired token'
           });
         }
-        
         return createResponse(200, {
           success: true,
           data: {
@@ -205,6 +188,7 @@ exports.handler = async (event) => {
           },
           message: 'Profile retrieved successfully'
         });
+      }
       
       // Health check
       case 'GET:/health':
