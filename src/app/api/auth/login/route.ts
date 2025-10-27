@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
+import { getAuthRecordByEmail } from '@/lib/dynamo'
+import { signJwt } from '@/lib/jwt'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -13,29 +15,35 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, password } = loginSchema.parse(body)
 
-    // Authenticate with Supabase
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (authError) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      )
+    // Lookup credentials in DynamoDB
+    const usersTable = process.env.DYNAMO_USERS_TABLE
+    if (!usersTable) {
+      console.error('DYNAMO_USERS_TABLE is not set in environment')
+      return NextResponse.json({ error: 'Authentication backend not configured' }, { status: 500 })
     }
 
-    if (!authData.user) {
-      return NextResponse.json(
-        { error: 'Authentication failed' },
-        { status: 401 }
-      )
+    const authRecord = await getAuthRecordByEmail(usersTable, email)
+    if (!authRecord) {
+      // Log server-side reason for easier debugging while keeping client message generic
+      console.debug(`Login failed: no auth record for email=${email}`)
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    const passwordHash = authRecord.passwordHash
+    if (!passwordHash) {
+      console.debug(`Login failed: auth record for email=${email} has no passwordHash`)
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    const match = await bcrypt.compare(password, passwordHash)
+    if (!match) {
+      console.debug(`Login failed: password mismatch for email=${email}`)
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
     // Get user profile from database
     const user = await prisma.user.findUnique({
-      where: { id: authData.user.id },
+      where: { id: authRecord.userId },
       select: {
         id: true,
         email: true,
@@ -71,10 +79,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Issue JWT (stateless)
+    const token = signJwt({ sub: user.id, email: user.email, role: user.role })
+
     return NextResponse.json({
       message: 'Login successful',
       user,
-      session: authData.session,
+      token,
     })
   } catch (error) {
     console.error('Login error:', error)
@@ -96,15 +107,7 @@ export async function POST(request: NextRequest) {
 // Logout endpoint
 export async function DELETE(request: NextRequest) {
   try {
-    const { error } = await supabase.auth.signOut()
-
-    if (error) {
-      return NextResponse.json(
-        { error: 'Logout failed' },
-        { status: 500 }
-      )
-    }
-
+    // Stateless logout for JWT-based auth: client discards token
     return NextResponse.json({ message: 'Logout successful' })
   } catch (error) {
     console.error('Logout error:', error)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
 
 export async function authMiddleware(request: NextRequest) {
@@ -60,13 +61,28 @@ export async function requireRole(
 // Helper to get user from request
 async function getUser(request: NextRequest) {
   const { supabase } = await createClient(request)
-  
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
 
-  return { user, error }
+  // If Supabase was removed, fallback to JWT bearer token authentication.
+  if (!supabase) {
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization') || ''
+    const token = authHeader.replace(/^Bearer\s+/i, '') || null
+    if (!token) return { user: null, error: new Error('No auth token') }
+    try {
+      const claims = jwt.verify(token, process.env.JWT_SECRET || '') as any
+      const user = { id: claims.uid || claims.sub || claims.id || null, email: claims.email || null }
+      return { user, error: null }
+    } catch (err) {
+      return { user: null, error: err as Error }
+    }
+  }
+
+  if (supabase) {
+    const result = await (supabase as any).auth.getUser()
+    const { data: { user }, error } = result
+    return { user, error }
+  }
+
+  return { user: null, error: new Error('Supabase client unavailable') }
 }
 
 // Utility function to check if user owns resource

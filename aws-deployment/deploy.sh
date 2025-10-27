@@ -125,15 +125,14 @@ cat > package.json << EOL
   "name": "lux-ride-lambda-functions",
   "version": "1.0.0",
   "description": "Lambda functions for Lux Ride",
-  "dependencies": {
-    "@prisma/client": "^5.6.0",
-    "@supabase/supabase-js": "^2.38.0",
-    "stripe": "^14.8.0",
-    "squareup": "^1.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
-    "aws-sdk": "^2.1400.0"
-  }
+    "dependencies": {
+        "@prisma/client": "^5.6.0",
+        "stripe": "^14.8.0",
+        "squareup": "^1.0.0",
+        "jsonwebtoken": "^9.0.2",
+        "bcryptjs": "^2.4.3",
+        "aws-sdk": "^2.1400.0"
+    }
 }
 EOL
 
@@ -144,65 +143,20 @@ echo -e "${BLUE}⚡ Step 3: Creating Lambda functions...${NC}"
 
 # Auth Login Lambda
 cat > auth/login.js << 'EOL'
-const { createClient } = require('@supabase/supabase-js');
-const AWS = require('aws-sdk');
-
-const secretsManager = new AWS.SecretsManager();
+// Supabase removed from this repository. This placeholder Lambda returns 501
+// to indicate the auth/login functionality should be implemented using
+// your chosen auth provider (DynamoDB, Cognito, JWT, etc.).
 
 exports.handler = async (event) => {
-    try {
-        // Get secrets
-        const supabaseSecret = await secretsManager.getSecretValue({
-            SecretId: process.env.SUPABASE_SECRET_ARN
-        }).promise();
-        
-        const supabaseConfig = JSON.parse(supabaseSecret.SecretString);
-        
-        const supabase = createClient(
-            supabaseConfig.url,
-            supabaseConfig.service_key
-        );
-
-        const { email, password } = JSON.parse(event.body);
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-
-        if (error) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ error: error.message })
-            };
-        }
-
-        return {
-            statusCode: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                user: data.user,
-                session: data.session 
-            })
-        };
-    } catch (error) {
-        console.error('Login error:', error);
-        return {
-            statusCode: 500,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ error: 'Internal server error' })
-        };
-    }
+  console.error('auth/login invoked but Supabase auth was removed from the codebase');
+  return {
+    statusCode: 501,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ error: 'Auth not implemented. Supabase integration removed.' })
+  };
 };
 EOL
 

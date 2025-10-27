@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { v4 as uuidv4 } from 'uuid'
+import { getAuthRecordByEmail, putAuthRecord } from '@/lib/dynamo'
 import { z } from 'zod'
 
 const registerSchema = z.object({
@@ -10,13 +11,31 @@ const registerSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   phone: z.string().optional(),
-  role: z.enum(['CUSTOMER', 'DRIVER']).default('CUSTOMER'),
+  role: z.preprocess((val) => {
+    if (typeof val === 'string') return val.toUpperCase()
+    return val
+  }, z.enum(['CUSTOMER', 'DRIVER'])).default('CUSTOMER'),
 })
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const validatedData = registerSchema.parse(body)
+
+    // Normalize inputs for better UX: uppercase role and ensure required names exist
+    const rawRole = body?.role ? String(body.role) : 'CUSTOMER'
+    let roleUpper = rawRole.toUpperCase()
+    if (roleUpper !== 'CUSTOMER' && roleUpper !== 'DRIVER') {
+      roleUpper = 'CUSTOMER'
+    }
+
+    const normalized = {
+      ...body,
+      role: roleUpper,
+      firstName: body?.firstName ? String(body.firstName).trim() : 'Unknown',
+      lastName: body?.lastName ? String(body.lastName).trim() : 'User',
+    }
+
+    const validatedData = registerSchema.parse(normalized)
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -30,37 +49,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create user in Supabase Auth
-    const { data: authUser, error: authError } = await supabase.auth.signUp({
-      email: validatedData.email,
-      password: validatedData.password,
-      options: {
-        data: {
-          first_name: validatedData.firstName,
-          last_name: validatedData.lastName,
-          role: validatedData.role,
-        },
-      },
-    })
-
-    if (authError) {
-      return NextResponse.json(
-        { error: authError.message },
-        { status: 400 }
-      )
-    }
-
-    if (!authUser.user) {
-      return NextResponse.json(
-        { error: 'Failed to create user' },
-        { status: 500 }
-      )
-    }
-
-    // Create user profile in database
+    // Create user profile in Postgres (Prisma)
+    const newUserId = uuidv4()
     const user = await prisma.user.create({
       data: {
-        id: authUser.user.id,
+        id: newUserId,
         email: validatedData.email,
         firstName: validatedData.firstName,
         lastName: validatedData.lastName,
@@ -78,6 +71,23 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Store credentials in DynamoDB (best-effort)
+    const usersTable = process.env.DYNAMO_USERS_TABLE
+    const existing = await getAuthRecordByEmail(usersTable, validatedData.email)
+    if (existing) {
+      // Rollback Prisma user
+      await prisma.user.delete({ where: { id: user.id } })
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 })
+    }
+
+    const passwordHash = await bcrypt.hash(validatedData.password, 10)
+    await putAuthRecord(usersTable, {
+      email: validatedData.email,
+      userId: user.id,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+    })
+
     // If registering as driver, create driver profile
     if (validatedData.role === 'DRIVER') {
       await prisma.driver.create({
@@ -92,7 +102,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: 'Registration successful',
       user,
-      needsEmailVerification: !authUser.user.email_confirmed_at,
     })
   } catch (error) {
     console.error('Registration error:', error)

@@ -38,7 +38,9 @@ export class PaymentService {
           if (paymentMethodId) {
             // Direct payment with payment method
             const intentResult = await StripePaymentService.createPaymentIntent(amount, customerId, metadata)
-            if (!intentResult.success) return intentResult
+            if (!intentResult.success || !intentResult.data?.id) {
+              return { success: false, error: 'Failed to create payment intent' }
+            }
 
             return await StripePaymentService.confirmPaymentIntent(intentResult.data.id, paymentMethodId)
           } else {

@@ -5,6 +5,7 @@
 ### Option 1: Vercel (Recommended)
 
 #### 1. Prepare for Deployment
+
 ```bash
 # Make sure your project is in a Git repository
 git init
@@ -17,6 +18,7 @@ git push -u origin main
 ```
 
 #### 2. Deploy to Vercel
+
 ```bash
 # Install Vercel CLI
 npm i -g vercel
@@ -37,13 +39,17 @@ vercel --prod
 ```
 
 #### 3. Environment Variables in Vercel
+
 Go to your Vercel dashboard → Project → Settings → Environment Variables
 
 Add these variables:
+
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Supabase variables removed from default configuration.
+# If you still want to use Supabase for auth or DB, set these in your deployment environment:
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+# SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 DATABASE_URL=your_supabase_postgres_url
 DIRECT_URL=your_supabase_direct_url
 STRIPE_SECRET_KEY=your_stripe_secret
@@ -56,7 +62,9 @@ JWT_SECRET=your_jwt_secret
 ```
 
 #### 4. Database Migration
+
 After deployment, run migrations:
+
 ```bash
 # Using Vercel CLI
 vercel env pull .env.local
@@ -67,18 +75,20 @@ npm run db:seed
 ### Option 2: Railway
 
 #### 1. Install Railway CLI
+
 ```bash
 npm install -g @railway/cli
 railway login
 ```
 
 #### 2. Deploy
+
 ```bash
 # Initialize Railway project
 railway init
 
 # Set environment variables
-railway variables set NEXT_PUBLIC_SUPABASE_URL=your_url
+# If you use Supabase set NEXT_PUBLIC_SUPABASE_URL in Railway; otherwise set DATABASE_URL or Dynamo table names as appropriate.
 railway variables set DATABASE_URL=your_database_url
 # ... add all other env vars
 
@@ -89,6 +99,7 @@ railway up
 ### Option 3: AWS (Advanced)
 
 #### 1. Create Lambda Function
+
 ```bash
 # Install Serverless Framework
 npm install -g serverless
@@ -97,6 +108,7 @@ npm install -g serverless
 ```
 
 **serverless.yml**:
+
 ```yaml
 service: lux-ride-backend
 
@@ -105,9 +117,9 @@ provider:
   runtime: nodejs18.x
   region: us-east-1
   environment:
-    NEXT_PUBLIC_SUPABASE_URL: ${env:NEXT_PUBLIC_SUPABASE_URL}
+    # NEXT_PUBLIC_SUPABASE_URL: ${env:NEXT_PUBLIC_SUPABASE_URL}  # Optional: set if using Supabase
     DATABASE_URL: ${env:DATABASE_URL}
-    # Add other env vars
+    # Add other env vars (e.g., DYNAMO_* table names)
 
 functions:
   api:
@@ -124,37 +136,22 @@ plugins:
   - serverless-nextjs-plugin
 ```
 
-## Database Setup (Supabase)
+## Database setup
 
-### 1. Create Supabase Project
-1. Go to [supabase.com](https://supabase.com)
-2. Create new project
-3. Choose region (closer to your users)
-4. Wait for setup to complete
+This project uses Prisma + Postgres for the main application database (configured via `DATABASE_URL`).
 
-### 2. Get Connection Details
-```bash
-# From Supabase Dashboard → Settings → Database
-# Connection string format:
-postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+If you are using serverless Lambdas and want optional audit logging or auxiliary storage, the project also supports DynamoDB for certain lambdas (see `lambda/*/dynamo.js`). Configure Dynamo tables with environment variables such as `DYNAMO_PAYMENTS_TABLE`, `DYNAMO_USERS_TABLE`, `DYNAMO_BOOKINGS_TABLE`, and `DYNAMO_DRIVERS_TABLE` in your deployment environment.
 
-# For connection pooling (recommended for serverless):
-postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1
+If you intend to use Supabase for auth or hosting the Postgres database, set the Supabase environment variables in your deployment environment (they are optional and not required by default):
+
+```
+# NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=[ANON-KEY]
+# SUPABASE_SERVICE_ROLE_KEY=[SERVICE-ROLE-KEY]
 ```
 
-### 3. Set up Environment Variables
-```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=[ANON-KEY]
-SUPABASE_SERVICE_ROLE_KEY=[SERVICE-ROLE-KEY]
+Run Prisma migrations the same way regardless of where your Postgres instance is hosted:
 
-# Database URLs
-DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1"
-DIRECT_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres"
-```
-
-### 4. Run Database Migrations
 ```bash
 # Generate Prisma client
 npm run db:generate
@@ -208,6 +205,7 @@ npm run db:seed
    - Geocoding API
 
 3. **Create API Key**:
+
    ```env
    GOOGLE_MAPS_API_KEY=your_api_key
    ```
@@ -219,6 +217,7 @@ npm run db:seed
 ## Production Checklist
 
 ### Security
+
 - [ ] Environment variables properly set
 - [ ] Database connection secured (SSL)
 - [ ] API rate limiting configured
@@ -227,6 +226,7 @@ npm run db:seed
 - [ ] Supabase RLS policies enabled
 
 ### Performance
+
 - [ ] Database indexes created
 - [ ] Connection pooling enabled
 - [ ] CDN configured for static assets
@@ -234,6 +234,7 @@ npm run db:seed
 - [ ] Logging configured
 
 ### Monitoring
+
 ```bash
 # Add Sentry for error tracking
 npm install @sentry/nextjs
@@ -256,10 +257,11 @@ module.exports = withSentryConfig({
 NODE_ENV=production
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 
-# Supabase (Production)
-NEXT_PUBLIC_SUPABASE_URL=https://your-prod-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_prod_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_prod_service_key
+# Supabase (Production) — optional
+# If using Supabase for hosting Postgres or frontend auth, set the following in production. Otherwise set DATABASE_URL to point to your Postgres instance and configure Dynamo table names for lambdas where needed.
+# NEXT_PUBLIC_SUPABASE_URL=https://your-prod-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your_prod_anon_key
+# SUPABASE_SERVICE_ROLE_KEY=your_prod_service_key
 
 # Database (Production)
 DATABASE_URL="postgresql://postgres:[PROD-PASSWORD]@db.[PROD-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1"
@@ -284,11 +286,13 @@ JWT_SECRET=your_secure_jwt_secret
 ## Testing Deployment
 
 ### 1. Health Check
+
 ```bash
 curl https://your-deployed-backend.vercel.app/api/health
 ```
 
 ### 2. Test Authentication
+
 ```bash
 # Register user
 curl -X POST https://your-backend.vercel.app/api/auth/register \
@@ -310,6 +314,7 @@ curl -X POST https://your-backend.vercel.app/api/auth/login \
 ```
 
 ### 3. Test API with Auth
+
 ```bash
 # Use token from login response
 curl -X GET https://your-backend.vercel.app/api/bookings \
@@ -319,32 +324,35 @@ curl -X GET https://your-backend.vercel.app/api/bookings \
 ## Scaling Considerations
 
 ### Database
+
 - **Connection Limits**: Use connection pooling (PgBouncer)
 - **Read Replicas**: For heavy read workloads
 - **Caching**: Redis for frequently accessed data
 
 ### API Performance
+
 - **Rate Limiting**: Prevent abuse
 - **Caching**: Response caching where appropriate
 - **Database Optimization**: Proper indexes and queries
 
 ### Monitoring & Alerts
+
 ```javascript
 // Example monitoring setup
-import * as Sentry from '@sentry/nextjs'
+import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV,
-})
+});
 
 // In your API routes
 export default async function handler(req, res) {
   try {
     // API logic
   } catch (error) {
-    Sentry.captureException(error)
-    res.status(500).json({ error: 'Internal server error' })
+    Sentry.captureException(error);
+    res.status(500).json({ error: "Internal server error" });
   }
 }
 ```
@@ -352,6 +360,7 @@ export default async function handler(req, res) {
 ## Rollback Strategy
 
 ### Vercel
+
 ```bash
 # List deployments
 vercel ls
@@ -361,6 +370,7 @@ vercel promote [deployment-url] --scope [team]
 ```
 
 ### Railway
+
 ```bash
 # Rollback to previous deployment
 railway rollback

@@ -8,7 +8,9 @@ This backend can be integrated with any frontend framework. Here are detailed gu
 
 ## 1. 📱 React/Next.js Frontend Integration
 
-### Setup Supabase Client (Frontend)
+### Setup Supabase Client (Frontend) (optional)
+
+> Note: Supabase is optional. The backend uses Prisma/Postgres for core data and Lambda functions may use DynamoDB for audit logging. If you don't use Supabase for frontend auth, you can skip this section. If you do, follow the steps below.
 
 ```bash
 npm install @supabase/supabase-js @supabase/ssr
@@ -674,8 +676,9 @@ useEffect(() => {
 ### Frontend `.env.local`
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+# Supabase env vars removed from default; set these only if you use Supabase for frontend auth
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
@@ -704,6 +707,34 @@ curl -X GET http://localhost:3000/api/bookings \
 ```
 
 This integration guide provides everything needed to connect any frontend to your luxury ride backend!
+
+## 🛠️ Troubleshooting: CORS Errors
+
+If you see errors like:
+
+```
+Access to fetch at 'http://localhost:3001/api/auth/login' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+**Solution:**  
+Make sure your backend server at `localhost:3001` sends the correct CORS headers.  
+For Express.js, add this middleware:
+
+```javascript
+const cors = require("cors");
+app.use(
+  cors({
+    origin: "http://localhost:3000", // or '*' for development
+    credentials: true,
+  })
+);
+```
+
+If using another framework, ensure it allows requests from your frontend's origin and responds with `Access-Control-Allow-Origin` and other required headers.
+
+**Note:**  
+CORS errors are browser security features. They must be fixed on the backend API server, not the frontend.
+
 ## DynamoDB Audit Logging (Backend)
 
 You can enable optional audit logging of payment events in the Payments Lambda by setting the `DYNAMO_PAYMENTS_TABLE` environment variable to a DynamoDB table name. When set, the Lambda writes a PutItem per event on a best‑effort basis and never fails the request if logging encounters an error.

@@ -334,9 +334,10 @@ Update `lux-ride/.env.local`:
 # API Gateway Endpoints
 NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.us-east-1.amazonaws.com/prod
 
-# Supabase (keep existing)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+# Supabase (optional)
+# Supabase environment variables are optional and removed from the default configuration.
+# If you use Supabase for frontend auth or to host Postgres, set:
+# NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment.
 
 # Stripe (keep existing)
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key

@@ -30,18 +30,11 @@ Name: AWS_REGION
 Value: us-east-2
 ```
 
-### **🗄️ Supabase Database**
+### **🗄️ Database / Optional Supabase**
 
-```
-Name: SUPABASE_URL
-Value: [Your Supabase project URL - https://xyz.supabase.co]
+This project uses Prisma/Postgres for the primary application database (configured via `DATABASE_URL`).
 
-Name: SUPABASE_ANON_KEY
-Value: [Your Supabase anonymous key]
-
-Name: SUPABASE_SERVICE_ROLE_KEY
-Value: [Your Supabase service role key]
-```
+Supabase is optional. If you do use Supabase for auth or to host Postgres, add the usual Supabase secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) to your GitHub repository secrets. Otherwise, you can omit these and instead set `DATABASE_URL` (and Dynamo table names for lambdas) as needed.
 
 ### **💳 Payment Processors**
 
@@ -97,10 +90,9 @@ cd /path/to/jp-luxury-ride_backend
 gh secret set AWS_ACCESS_KEY_ID --body "YOUR_ACCESS_KEY_ID"
 gh secret set AWS_SECRET_ACCESS_KEY --body "YOUR_SECRET_ACCESS_KEY"
 
-# Set database secrets
-gh secret set SUPABASE_URL --body "https://your-project.supabase.co"
-gh secret set SUPABASE_ANON_KEY --body "eyJ..."
-gh secret set SUPABASE_SERVICE_ROLE_KEY --body "eyJ..."
+# Set database secrets (Postgres/Prisma)
+# If you're using a hosted Postgres, set DATABASE_URL. If you use Supabase, set the SUPABASE_* secrets instead.
+# gh secret set DATABASE_URL --body "postgresql://postgres:...@host:5432/dbname"
 
 # Set payment processor secrets
 gh secret set STRIPE_SECRET_KEY --body "sk_test_your_stripe_key"
@@ -145,21 +137,7 @@ gh secret set AWS_ACCOUNT_ID --body "711588522246"
 gh secret set AWS_REGION --body "us-east-2"
 ```
 
-### **2. Supabase Database Setup**
-
-#### Get your Supabase credentials:
-
-1. Go to your Supabase project dashboard
-2. Click **Settings** → **API**
-3. Copy the **URL**, **anon public**, and **service_role** keys
-
-#### Add to GitHub:
-
-```bash
-gh secret set SUPABASE_URL --body "https://your-project.supabase.co"
-gh secret set SUPABASE_ANON_KEY --body "eyJ..."
-gh secret set SUPABASE_SERVICE_ROLE_KEY --body "eyJ..."
-```
+<!-- Supabase-specific instructions removed. If required, add SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY as repository secrets. For most deployments using this repo's defaults, set DATABASE_URL and any DYNAMO_* table names. -->
 
 ### **3. Payment Processor Setup**
 
@@ -224,17 +202,20 @@ gh secret list
 You should see all these secrets:
 
 **AWS Infrastructure:**
+
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_ACCOUNT_ID`
 - `AWS_REGION`
 
 **Database:**
+
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 **Payment Processors:**
+
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLISHABLE_KEY`
 - `SQUARE_ACCESS_TOKEN`
@@ -243,6 +224,7 @@ You should see all these secrets:
 - `SQUARE_ENVIRONMENT`
 
 **Security:**
+
 - `JWT_SECRET`
 - `CORS_ORIGIN`
 
