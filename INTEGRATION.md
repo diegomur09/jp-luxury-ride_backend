@@ -1,4 +1,5 @@
 <!-- Trigger workflow: trivial change -->
+
 # Frontend Integration Guide
 
 ## 🔗 Backend Integration Options
@@ -14,98 +15,105 @@ npm install @supabase/supabase-js @supabase/ssr
 ```
 
 Create `lib/supabase-client.ts`:
+
 ```typescript
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 ```
 
 ### Authentication Integration
 
 Create `hooks/useAuth.ts`:
+
 ```typescript
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase-client'
-import { User } from '@supabase/supabase-js'
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase-client";
+import { User } from "@supabase/supabase-js";
 
 interface UserProfile {
-  id: string
-  email: string
-  firstName: string
-  lastName: string
-  role: 'CUSTOMER' | 'DRIVER' | 'ADMIN'
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: "CUSTOMER" | "DRIVER" | "ADMIN";
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserProfile(session.user.id)
+        fetchUserProfile(session.user.id);
       }
-      setLoading(false)
-    })
+      setLoading(false);
+    });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          fetchUserProfile(session.user.id)
-        } else {
-          setProfile(null)
-        }
-        setLoading(false)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserProfile(session.user.id);
+      } else {
+        setProfile(null);
       }
-    )
+      setLoading(false);
+    });
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      const response = await fetch('/api/user/profile', {
+      const response = await fetch("/api/user/profile", {
         headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        }
-      })
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
       if (response.ok) {
-        const data = await response.json()
-        setProfile(data.user)
+        const data = await response.json();
+        setProfile(data.user);
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error)
+      console.error("Error fetching user profile:", error);
     }
-  }
+  };
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      password
-    })
-    return { data, error }
-  }
+      password,
+    });
+    return { data, error };
+  };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, firstName, lastName })
-    })
-    return await response.json()
-  }
+  const signUp = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string
+  ) => {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, firstName, lastName }),
+    });
+    return await response.json();
+  };
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-  }
+    await supabase.auth.signOut();
+  };
 
   return {
     user,
@@ -113,83 +121,86 @@ export function useAuth() {
     loading,
     signIn,
     signUp,
-    signOut
-  }
+    signOut,
+  };
 }
 ```
 
 ### API Integration Hook
 
 Create `hooks/useAPI.ts`:
+
 ```typescript
-import { supabase } from '@/lib/supabase-client'
+import { supabase } from "@/lib/supabase-client";
 
 export function useAPI() {
   const getAuthHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session?.access_token}`
-    }
-  }
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session?.access_token}`,
+    };
+  };
 
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    const headers = await getAuthHeaders()
-    
+    const headers = await getAuthHeaders();
+
     const response = await fetch(`/api${endpoint}`, {
       ...options,
       headers: {
         ...headers,
-        ...options.headers
-      }
-    })
+        ...options.headers,
+      },
+    });
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'API call failed')
+      const error = await response.json();
+      throw new Error(error.error || "API call failed");
     }
 
-    return await response.json()
-  }
+    return await response.json();
+  };
 
   // Booking methods
   const createBooking = async (bookingData: any) => {
-    return apiCall('/bookings', {
-      method: 'POST',
-      body: JSON.stringify(bookingData)
-    })
-  }
+    return apiCall("/bookings", {
+      method: "POST",
+      body: JSON.stringify(bookingData),
+    });
+  };
 
   const getBookings = async (params?: any) => {
-    const queryString = params ? `?${new URLSearchParams(params)}` : ''
-    return apiCall(`/bookings${queryString}`)
-  }
+    const queryString = params ? `?${new URLSearchParams(params)}` : "";
+    return apiCall(`/bookings${queryString}`);
+  };
 
   const updateBooking = async (id: string, updates: any) => {
     return apiCall(`/bookings/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates)
-    })
-  }
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
+  };
 
   // Payment methods
   const createPayment = async (paymentData: any) => {
-    return apiCall('/payments', {
-      method: 'POST',
-      body: JSON.stringify(paymentData)
-    })
-  }
+    return apiCall("/payments", {
+      method: "POST",
+      body: JSON.stringify(paymentData),
+    });
+  };
 
   const confirmPayment = async (paymentId: string, confirmData: any) => {
     return apiCall(`/payments/${paymentId}`, {
-      method: 'PUT',
-      body: JSON.stringify(confirmData)
-    })
-  }
+      method: "PUT",
+      body: JSON.stringify(confirmData),
+    });
+  };
 
   const getPayments = async () => {
-    return apiCall('/payments')
-  }
+    return apiCall("/payments");
+  };
 
   return {
     createBooking,
@@ -197,8 +208,8 @@ export function useAPI() {
     updateBooking,
     createPayment,
     confirmPayment,
-    getPayments
-  }
+    getPayments,
+  };
 }
 ```
 
@@ -427,7 +438,7 @@ function PaymentForm({ bookingId, amount }: { bookingId: string, amount: number 
           }}
         />
       </div>
-      
+
       <div className="text-lg font-semibold">
         Total: ${amount.toFixed(2)}
       </div>
@@ -465,11 +476,11 @@ npm install @stripe/stripe-react-native
 
 ```typescript
 // lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { createClient } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const supabaseUrl = 'YOUR_SUPABASE_URL'
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'
+const supabaseUrl = "YOUR_SUPABASE_URL";
+const supabaseAnonKey = "YOUR_SUPABASE_ANON_KEY";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -478,53 +489,55 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
-})
+});
 ```
 
 ### API Service (React Native)
 
 ```typescript
 // services/api.ts
-import { supabase } from '../lib/supabase'
+import { supabase } from "../lib/supabase";
 
 class APIService {
   private async getAuthHeaders() {
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session?.access_token}`
-    }
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session?.access_token}`,
+    };
   }
 
   async createBooking(bookingData: any) {
-    const headers = await this.getAuthHeaders()
-    
-    const response = await fetch('YOUR_API_URL/api/bookings', {
-      method: 'POST',
+    const headers = await this.getAuthHeaders();
+
+    const response = await fetch("YOUR_API_URL/api/bookings", {
+      method: "POST",
       headers,
-      body: JSON.stringify(bookingData)
-    })
+      body: JSON.stringify(bookingData),
+    });
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error)
+      const error = await response.json();
+      throw new Error(error.error);
     }
 
-    return response.json()
+    return response.json();
   }
 
   async getBookings() {
-    const headers = await this.getAuthHeaders()
-    
-    const response = await fetch('YOUR_API_URL/api/bookings', {
-      headers
-    })
+    const headers = await this.getAuthHeaders();
 
-    return response.json()
+    const response = await fetch("YOUR_API_URL/api/bookings", {
+      headers,
+    });
+
+    return response.json();
   }
 }
 
-export const apiService = new APIService()
+export const apiService = new APIService();
 ```
 
 ## 4. 🌐 Vanilla JavaScript Integration
@@ -532,87 +545,91 @@ export const apiService = new APIService()
 ```html
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Lux Ride</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://js.stripe.com/v3/"></script>
-</head>
-<body>
+  </head>
+  <body>
     <script>
-        // Initialize Supabase
-        const supabase = window.supabase.createClient(
-            'YOUR_SUPABASE_URL',
-            'YOUR_SUPABASE_ANON_KEY'
-        )
+      // Initialize Supabase
+      const supabase = window.supabase.createClient(
+        "YOUR_SUPABASE_URL",
+        "YOUR_SUPABASE_ANON_KEY"
+      );
 
-        // Initialize Stripe
-        const stripe = Stripe('YOUR_STRIPE_PUBLISHABLE_KEY')
+      // Initialize Stripe
+      const stripe = Stripe("YOUR_STRIPE_PUBLISHABLE_KEY");
 
-        // Auth functions
-        async function login(email, password) {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            })
-            
-            if (error) {
-                console.error('Login error:', error)
-                return
-            }
+      // Auth functions
+      async function login(email, password) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-            console.log('Logged in:', data.user)
+        if (error) {
+          console.error("Login error:", error);
+          return;
         }
 
-        // API functions
-        async function createBooking(bookingData) {
-            const { data: { session } } = await supabase.auth.getSession()
-            
-            const response = await fetch('/api/bookings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
-                },
-                body: JSON.stringify(bookingData)
-            })
+        console.log("Logged in:", data.user);
+      }
 
-            return response.json()
+      // API functions
+      async function createBooking(bookingData) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch("/api/bookings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify(bookingData),
+        });
+
+        return response.json();
+      }
+
+      // Payment function
+      async function processPayment(bookingId, amount) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        // Create payment intent
+        const response = await fetch("/api/payments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            bookingId,
+            provider: "stripe",
+          }),
+        });
+
+        const { clientSecret } = await response.json();
+
+        // Process payment with Stripe
+        const { error } = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: {
+              // Card element
+            },
+          },
+        });
+
+        if (!error) {
+          console.log("Payment successful!");
         }
-
-        // Payment function
-        async function processPayment(bookingId, amount) {
-            const { data: { session } } = await supabase.auth.getSession()
-            
-            // Create payment intent
-            const response = await fetch('/api/payments', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
-                },
-                body: JSON.stringify({
-                    bookingId,
-                    provider: 'stripe'
-                })
-            })
-
-            const { clientSecret } = await response.json()
-
-            // Process payment with Stripe
-            const { error } = await stripe.confirmCardPayment(clientSecret, {
-                payment_method: {
-                    card: {
-                        // Card element
-                    }
-                }
-            })
-
-            if (!error) {
-                console.log('Payment successful!')
-            }
-        }
+      }
     </script>
-</body>
+  </body>
 </html>
 ```
 
@@ -624,32 +641,32 @@ export const apiService = new APIService()
 // Real-time booking updates
 useEffect(() => {
   const channel = supabase
-    .channel('bookings')
+    .channel("bookings")
     .on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'public',
-        table: 'bookings',
-        filter: `customerId=eq.${user?.id}`
+        event: "*",
+        schema: "public",
+        table: "bookings",
+        filter: `customerId=eq.${user?.id}`,
       },
       (payload) => {
-        console.log('Booking update:', payload)
+        console.log("Booking update:", payload);
         // Update local state
-        setBookings(prev => {
+        setBookings((prev) => {
           // Update booking in list
-          return prev.map(booking => 
+          return prev.map((booking) =>
             booking.id === payload.new.id ? payload.new : booking
-          )
-        })
+          );
+        });
       }
     )
-    .subscribe()
+    .subscribe();
 
   return () => {
-    supabase.removeChannel(channel)
-  }
-}, [user?.id])
+    supabase.removeChannel(channel);
+  };
+}, [user?.id]);
 ```
 
 ## 6. 📊 Environment Configuration
@@ -687,3 +704,15 @@ curl -X GET http://localhost:3000/api/bookings \
 ```
 
 This integration guide provides everything needed to connect any frontend to your luxury ride backend!
+## DynamoDB Audit Logging (Backend)
+
+You can enable optional audit logging of payment events in the Payments Lambda by setting the `DYNAMO_PAYMENTS_TABLE` environment variable to a DynamoDB table name. When set, the Lambda writes a PutItem per event on a best‑effort basis and never fails the request if logging encounters an error.
+
+Required IAM permission for the Lambda execution role:
+
+- dynamodb:PutItem on the target table ARN
+
+Item key pattern:
+
+- pk: `BOOKING#{id}`, `PAYMENT#{id}`, or `INTENT#{id}`
+- sk: `STRIPE_INTENT#{id}`, `CONFIRM#{timestamp}`, `SQUARE_PAYMENT#{id}`, `REFUND#{timestamp}`
