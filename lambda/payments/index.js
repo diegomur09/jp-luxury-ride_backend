@@ -249,7 +249,7 @@ exports.handler = async (event) => {
     switch (`${httpMethod}:${path}`) {
       
       // Create Stripe Payment Intent
-      case 'POST:/stripe/create-intent':
+      case 'POST:/stripe/create-intent': {
         const { amount, currency = 'usd', bookingId } = requestBody;
         
         if (!amount || amount <= 0) {
@@ -267,9 +267,10 @@ exports.handler = async (event) => {
           data: stripeIntent,
           message: 'Stripe payment intent created successfully'
         });
+      }
       
       // Confirm Stripe Payment
-      case 'POST:/stripe/confirm':
+      case 'POST:/stripe/confirm': {
         const { paymentIntentId } = requestBody;
         
         if (!paymentIntentId) {
@@ -285,9 +286,10 @@ exports.handler = async (event) => {
           data: confirmedPayment,
           message: 'Payment confirmed successfully'
         });
+      }
       
       // Process Square Payment
-      case 'POST:/square/create-payment':
+      case 'POST:/square/create-payment': {
         const { amount: sqAmount, sourceId, locationId, description, bookingId: sqBookingId } = requestBody;
         
         if (!sqAmount || sqAmount <= 0) {
@@ -311,9 +313,10 @@ exports.handler = async (event) => {
           data: squarePayment,
           message: 'Square payment processed successfully'
         });
+      }
       
       // Refund Payment (both processors)
-      case 'POST:/refund':
+      case 'POST:/refund': {
         const { processor, paymentId, amount: refundAmount, reason } = requestBody;
         
         if (!processor || !paymentId) {
@@ -341,9 +344,10 @@ exports.handler = async (event) => {
           data: refundResult,
           message: 'Refund processed successfully'
         });
+      }
       
       // Get Payment Status
-      case 'GET:/payment/{id}':
+      case 'GET:/payment/{id}': {
         const paymentIdFromPath = event.pathParameters?.id;
         const processorParam = params.processor;
         
@@ -366,6 +370,7 @@ exports.handler = async (event) => {
           data: paymentStatus,
           message: 'Payment status retrieved successfully'
         });
+      }
       
       // Health check
       case 'GET:/health':
