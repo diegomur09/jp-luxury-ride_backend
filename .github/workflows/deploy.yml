@@ -96,7 +96,6 @@ jobs:
           --zip-file fileb://${{ matrix.function }}-function.zip \
           --timeout 30 \
           --memory-size 256 \
-          # Only Square and generic env variables remain
           --environment Variables="{
             SQUARE_ACCESS_TOKEN=${{ secrets.SQUARE_ACCESS_TOKEN }},
             SQUARE_APPLICATION_ID=${{ secrets.SQUARE_APPLICATION_ID }},
