@@ -84,6 +84,23 @@ jobs:
           cd lambda/${{ matrix.function }}
           zip -r ${{ matrix.function }}-function.zip . -x "*.git*" "node_modules/.cache/*"
 
+          # Ensure environment variables are set on every deploy
+          aws lambda update-function-configuration \
+            --function-name jp-luxury-ride-${{ matrix.function }} \
+            --environment Variables="{
+              SQUARE_ACCESS_TOKEN=${{ secrets.SQUARE_ACCESS_TOKEN }},
+              SQUARE_APPLICATION_ID=${{ secrets.SQUARE_APPLICATION_ID }},
+              SQUARE_LOCATION_ID=${{ secrets.SQUARE_LOCATION_ID }},
+              SQUARE_ENVIRONMENT=${{ secrets.SQUARE_ENVIRONMENT }},
+              JWT_SECRET=${{ secrets.JWT_SECRET }},
+              CORS_ORIGIN=${{ secrets.CORS_ORIGIN }},
+              DYNAMO_USERS_TABLE=${{ secrets.DYNAMO_USERS_TABLE }},
+              DYNAMO_BOOKINGS_TABLE=${{ secrets.DYNAMO_BOOKINGS_TABLE }},
+              DYNAMO_DRIVERS_TABLE=${{ secrets.DYNAMO_DRIVERS_TABLE }},
+              DYNAMO_PAYMENTS_TABLE=${{ secrets.DYNAMO_PAYMENTS_TABLE }}
+            }" \
+            --region ${{ env.AWS_REGION }} || true
+
           aws lambda update-function-code \
             --function-name jp-luxury-ride-${{ matrix.function }} \
             --zip-file fileb://${{ matrix.function }}-function.zip \
