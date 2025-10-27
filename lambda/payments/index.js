@@ -1,5 +1,5 @@
 const Stripe = require('stripe');
-const { Client, Environment } = require('squareup');
+const { Client, Environment } = require('square');
 const { createClient } = require('@supabase/supabase-js');
 
 // Initialize Supabase client
