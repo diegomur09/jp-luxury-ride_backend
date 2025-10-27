@@ -91,7 +91,7 @@ jobs:
         aws lambda create-function \
           --function-name jp-luxury-ride-${{ matrix.function }} \
           --runtime nodejs18.x \
-          --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role \
+          --role ${{ secrets.AWS_LAMBDA_ROLE_ARN }} \
           --handler index.handler \
           --zip-file fileb://${{ matrix.function }}-function.zip \
           --timeout 30 \
