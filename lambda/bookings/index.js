@@ -41,7 +41,7 @@ exports.handler = async (event) => {
     }
     
     switch (`${httpMethod}:${path}`) {
-      case 'POST:/bookings':
+      case 'POST:/bookings': {
         const { pickup_location, dropoff_location, scheduled_time, vehicle_type } = requestBody;
         
         const { data: booking, error: createError } = await supabase
@@ -64,8 +64,9 @@ exports.handler = async (event) => {
           data: booking,
           message: 'Booking created successfully'
         });
+      }
       
-      case 'GET:/bookings':
+      case 'GET:/bookings': {
         const { data: bookings, error: fetchError } = await supabase
           .from('bookings')
           .select('*')
@@ -78,6 +79,7 @@ exports.handler = async (event) => {
           success: true,
           data: bookings
         });
+      }
       
       case 'GET:/health':
         return createResponse(200, {

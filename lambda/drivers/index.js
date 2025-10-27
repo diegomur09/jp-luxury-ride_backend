@@ -41,7 +41,7 @@ exports.handler = async (event) => {
     const params = queryStringParameters || {};
     
     switch (`${httpMethod}:${path}`) {
-      case 'GET:/drivers/available':
+      case 'GET:/drivers/available': {
         const { latitude, longitude, radius = 10 } = params;
         
         if (!latitude || !longitude) {
@@ -78,8 +78,9 @@ exports.handler = async (event) => {
           data: nearbyDrivers,
           count: nearbyDrivers.length
         });
+      }
       
-      case 'PUT:/drivers/{id}/location':
+      case 'PUT:/drivers/{id}/location': {
         const driverId = event.pathParameters?.id;
         const { latitude: newLat, longitude: newLon } = requestBody;
         
@@ -108,6 +109,7 @@ exports.handler = async (event) => {
           data: updatedDriver,
           message: 'Driver location updated successfully'
         });
+      }
       
       case 'GET:/health':
         return createResponse(200, {
