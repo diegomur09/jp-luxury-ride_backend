@@ -1,24 +1,21 @@
 # JP Luxury Ride - Backend API
 
-A comprehensive luxury ride-sharing backend built with Next.js, Supabase, and dual payment processing (Stripe + Square).
+A comprehensive luxury ride-sharing backend built with Next.js, AWS Lambda, DynamoDB, and dual payment processing (Stripe + Square).
 
 ## 🚀 Features
 
-- **Multi-Provider Authentication**: Supabase Auth with JWT tokens and role-based access
+- **Multi-Provider Authentication**: JWT tokens and role-based access, stored in DynamoDB
 - **Dual Payment Processing**: Both Stripe and Square payment integration
-- **Real-time Capabilities**: Supabase Realtime for live tracking and updates
-- **Comprehensive Booking System**: Full ride management with stops, scheduling, and pricing
+- **Comprehensive Booking System**: Full ride management with stops, scheduling, and pricing, stored in DynamoDB
 - **Role-Based Access Control**: Customer, Driver, and Admin roles with appropriate permissions
-- **Database Management**: Prisma ORM with PostgreSQL via Supabase
+- **Database Management**: DynamoDB for all user, booking, and payment data
 
 ## 📋 Tech Stack
 
 - **Framework**: Next.js 14 with App Router
-- **Database**: PostgreSQL (Supabase)
-- **ORM**: Prisma
-- **Authentication**: Supabase Auth
+- **Database**: DynamoDB (AWS)
+- **Authentication**: JWT Auth (DynamoDB-backed)
 - **Payments**: Stripe + Square
-- **Real-time**: Supabase Realtime
 - **Validation**: Zod
 - **TypeScript**: Full type safety
 
@@ -60,14 +57,20 @@ SQUARE_ACCESS_TOKEN=your_square_access_token
 SQUARE_ENVIRONMENT=sandbox
 ```
 
-### 3. Database Setup
+### 3. DynamoDB Setup
 
-Generate Prisma client and run migrations:
+Provision the following DynamoDB tables:
 
-```bash
-npm run db:generate
-npm run db:push
-npm run db:seed
+- Users table (e.g., Users)
+- Bookings table (e.g., Bookings)
+- Payments table (e.g., Payments)
+
+Set the table names in your environment variables:
+
+```
+DYNAMO_USERS_TABLE=Users
+DYNAMO_BOOKINGS_TABLE=Bookings
+DYNAMO_PAYMENTS_TABLE=Payments
 ```
 
 ### 4. Development Server
@@ -82,35 +85,36 @@ The API will be available at `http://localhost:3000/api`
 
 ### Authentication
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/register` | POST | Register new user |
-| `/api/auth/login` | POST | Login user |
-| `/api/auth/login` | DELETE | Logout user |
+| Endpoint             | Method | Description       |
+| -------------------- | ------ | ----------------- |
+| `/api/auth/register` | POST   | Register new user |
+| `/api/auth/login`    | POST   | Login user        |
+| `/api/auth/login`    | DELETE | Logout user       |
 
 ### Bookings
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/bookings` | GET | Get user bookings |
-| `/api/bookings` | POST | Create new booking |
-| `/api/bookings/[id]` | GET | Get booking details |
-| `/api/bookings/[id]` | PUT | Update booking |
-| `/api/bookings/[id]` | DELETE | Cancel booking |
+| Endpoint             | Method | Description         |
+| -------------------- | ------ | ------------------- |
+| `/api/bookings`      | GET    | Get user bookings   |
+| `/api/bookings`      | POST   | Create new booking  |
+| `/api/bookings/[id]` | GET    | Get booking details |
+| `/api/bookings/[id]` | PUT    | Update booking      |
+| `/api/bookings/[id]` | DELETE | Cancel booking      |
 
 ### Payments
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/payments` | GET | Get payment history |
-| `/api/payments` | POST | Create payment intent |
-| `/api/payments/[id]` | GET | Get payment details |
-| `/api/payments/[id]` | PUT | Confirm payment |
-| `/api/payments/[id]` | DELETE | Refund payment |
+| Endpoint             | Method | Description           |
+| -------------------- | ------ | --------------------- |
+| `/api/payments`      | GET    | Get payment history   |
+| `/api/payments`      | POST   | Create payment intent |
+| `/api/payments/[id]` | GET    | Get payment details   |
+| `/api/payments/[id]` | PUT    | Confirm payment       |
+| `/api/payments/[id]` | DELETE | Refund payment        |
 
 ### Example API Calls
 
 #### Register User
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \\
   -H "Content-Type: application/json" \\
@@ -124,6 +128,7 @@ curl -X POST http://localhost:3000/api/auth/register \\
 ```
 
 #### Create Booking
+
 ```bash
 curl -X POST http://localhost:3000/api/bookings \\
   -H "Content-Type: application/json" \\
@@ -137,6 +142,7 @@ curl -X POST http://localhost:3000/api/bookings \\
 ```
 
 #### Create Payment (Stripe)
+
 ```bash
 curl -X POST http://localhost:3000/api/payments \\
   -H "Content-Type: application/json" \\
@@ -149,6 +155,7 @@ curl -X POST http://localhost:3000/api/payments \\
 ```
 
 #### Create Payment (Square)
+
 ```bash
 curl -X POST http://localhost:3000/api/payments \\
   -H "Content-Type: application/json" \\
@@ -164,23 +171,23 @@ curl -X POST http://localhost:3000/api/payments \\
 
 ### Key Models
 
-- **User**: Customer/Driver/Admin profiles with Supabase Auth integration
-- **Booking**: Ride requests with pickup/dropoff, scheduling, and pricing
+- **User**: Customer/Driver/Admin profiles stored in DynamoDB
+- **Booking**: Ride requests with pickup/dropoff, scheduling, and pricing stored in DynamoDB
 - **Vehicle**: Fleet management with types, pricing, and features
 - **Driver**: Driver profiles with status, ratings, and location tracking
-- **Payment**: Multi-provider payment processing with full transaction history
+- **Payment**: Multi-provider payment processing with full transaction history in DynamoDB
 - **Address**: Location management with geocoding support
 
 ### Relationships
 
-- Users can have multiple Bookings and Payments
+- Users can have multiple Bookings and Payments (all in DynamoDB)
 - Drivers belong to Users and can have assigned Vehicles
 - Bookings connect Customers, Drivers, Vehicles, and Addresses
 - Payments are linked to specific Bookings
 
 ## 🔐 Security Features
 
-- **JWT Authentication**: Secure token-based auth via Supabase
+- **JWT Authentication**: Secure token-based auth via DynamoDB
 - **Role-Based Access Control**: Customer, Driver, Admin permissions
 - **Route Protection**: Middleware validates all protected endpoints
 - **Input Validation**: Zod schemas for all API inputs
@@ -221,10 +228,9 @@ curl -X POST http://localhost:3000/api/payments \\
 
 This backend is designed to work with any frontend framework. Key integration points:
 
-1. **Authentication**: Use Supabase client for auth state management
+1. **Authentication**: Use JWT tokens for auth state management (DynamoDB-backed)
 2. **API Calls**: Standard REST API with JSON responses
-3. **Real-time**: Subscribe to Supabase Realtime channels
-4. **Payments**: Integrate Stripe/Square SDKs on frontend
+3. **Payments**: Integrate Stripe/Square SDKs on frontend
 
 ## 🚀 Deployment
 
@@ -278,7 +284,7 @@ MIT License - see LICENSE file for details
 For setup issues or questions:
 
 1. Check the API documentation above
-2. Review the Supabase and Prisma documentation
+2. Review the AWS DynamoDB and Lambda documentation
 3. Check provider documentation (Stripe/Square)
 4. Open an issue in the repository
 
