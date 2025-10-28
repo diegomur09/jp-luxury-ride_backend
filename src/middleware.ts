@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -23,55 +22,25 @@ export async function middleware(request: NextRequest) {
     corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, x-user-id, x-user-email')
   }
 
-  // Handle CORS preflight early
-  if (isApiRoute && request.method === 'OPTIONS') {
     return new NextResponse(null, { status: 204, headers: corsHeaders })
-  }
 
-  // Public paths that don't require authentication
-  const publicPaths = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/callback',
-    '/api/health',
-    '/api/vehicles/public',
-  ]
-
-  // Check if the path is public
-  if (publicPaths.some(path => pathname.startsWith(path))) {
-    const response = NextResponse.next()
-    if (isApiRoute) {
-      corsHeaders.forEach((value, key) => response.headers.set(key, value))
-    }
-    return response
-  }
-
-  // Protect API routes
-  if (isApiRoute) {
-    const { supabase, response } = await createClient(request)
-
-    // If Supabase is unavailable, fallback to JWT bearer token verification
+      return nextResponse
     if (!supabase) {
-      const authHeader = request.headers.get('authorization') || request.headers.get('Authorization') || ''
-      const token = authHeader.replace(/^Bearer\s+/i, '') || null
-      if (!token) {
-        return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-      }
-      try {
         // lazy import to avoid adding dependency when unused
-        const jwt = await import('jsonwebtoken')
-        const claims = jwt.verify(token, process.env.JWT_SECRET || '') as any
-        const user = { id: claims.uid || claims.sub || claims.id || null, email: claims.email || null }
-        if (!user || !user.id) {
           return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-        }
-        // attach user headers
-        const requestHeaders = new Headers(request.headers)
-        requestHeaders.set('x-user-id', user.id)
-        requestHeaders.set('x-user-email', user.email || '')
-
-        const nextResponse = NextResponse.next({ request: { headers: requestHeaders } })
-        // Apply CORS headers to API responses
+    }
+    // Only JWT auth is supported after DynamoDB migration.
+    const authHeader = request.headers.get('authorization') || ''
+    const token = authHeader.replace(/^Bearer\s+/i, '') || null
+    if (!token) return NextResponse.json({ error: 'No auth token' }, { status: 401 })
+    try {
+      const jwt = await import('jsonwebtoken')
+      const claims = jwt.verify(token, process.env.JWT_SECRET || '') as any
+      request.user = claims
+      return NextResponse.next()
+    } catch (e) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
         corsHeaders.forEach((value, key) => nextResponse.headers.set(key, value))
         return nextResponse
       } catch (e) {

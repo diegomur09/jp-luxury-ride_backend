@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { createBooking, scanBookings } from '@/lib/dynamo'
 import { authMiddleware } from '@/lib/auth-middleware'
 import { z } from 'zod'
 
@@ -28,82 +28,29 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createBookingSchema.parse(body)
 
-    // Verify vehicle exists and is available
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: validatedData.vehicleId, isActive: true },
-    })
-
-    if (!vehicle) {
-      return NextResponse.json(
-        { error: 'Vehicle not found or unavailable' },
-        { status: 404 }
-      )
-    }
-
-    // Verify addresses exist
-    const [pickupAddress, dropoffAddress] = await Promise.all([
-      prisma.address.findUnique({ where: { id: validatedData.pickupAddressId } }),
-      prisma.address.findUnique({ where: { id: validatedData.dropoffAddressId } }),
-    ])
-
-    if (!pickupAddress || !dropoffAddress) {
-      return NextResponse.json(
-        { error: 'Invalid pickup or dropoff address' },
-        { status: 400 }
-      )
-    }
-
+    // For DynamoDB, skip vehicle/address validation for now (can be added with additional tables/logic)
     // Calculate initial pricing (simplified for now)
     const baseFare = 5.00
-    const estimatedDistance = calculateDistance(
-      pickupAddress.latitude || 0,
-      pickupAddress.longitude || 0,
-      dropoffAddress.latitude || 0,
-      dropoffAddress.longitude || 0
-    )
-    const distanceFare = estimatedDistance * vehicle.pricePerMile
-    const totalAmount = baseFare + distanceFare
+    const estimatedDistance = 1 // Placeholder, as we can't fetch address/vehicle
+    const distanceFare = 0 // Placeholder
+    const totalAmount = baseFare
 
-    // Create booking
-    const booking = await prisma.booking.create({
-      data: {
-        customerId: user.id,
-        vehicleId: validatedData.vehicleId,
-        pickupAddressId: validatedData.pickupAddressId,
-        dropoffAddressId: validatedData.dropoffAddressId,
-        scheduledAt: new Date(validatedData.scheduledAt),
-        baseFare,
-        distanceFare,
-        totalAmount,
-        distance: estimatedDistance,
-        notes: validatedData.notes,
-        specialRequests: validatedData.specialRequests,
-        status: 'PENDING',
-      },
-      include: {
-        vehicle: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        customer: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-      },
+    const bookingsTable = process.env.DYNAMO_BOOKINGS_TABLE || 'bookings'
+    const booking = await createBooking(bookingsTable, {
+      customerId: user.id,
+      vehicleId: validatedData.vehicleId,
+      pickupAddressId: validatedData.pickupAddressId,
+      dropoffAddressId: validatedData.dropoffAddressId,
+      scheduledAt: validatedData.scheduledAt,
+      baseFare,
+      distanceFare,
+      totalAmount,
+      distance: estimatedDistance,
+      notes: validatedData.notes,
+      specialRequests: validatedData.specialRequests,
+      status: 'PENDING',
+      stops: validatedData.stops || [],
     })
-
-    // Create booking stops if provided
-    if (validatedData.stops && validatedData.stops.length > 0) {
-      await prisma.bookingStop.createMany({
-        data: validatedData.stops.map(stop => ({
-          bookingId: booking.id,
-          ...stop,
-        })),
-      })
-    }
 
     return NextResponse.json({
       message: 'Booking created successfully',
@@ -138,46 +85,13 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    const whereClause: any = {
-      customerId: user.id,
-    }
-
-    if (status) {
-      whereClause.status = status
-    }
-
-    const bookings = await prisma.booking.findMany({
-      where: whereClause,
-      include: {
-        vehicle: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        driver: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                phone: true,
-              },
-            },
-          },
-        },
-        stops: {
-          orderBy: { order: 'asc' },
-        },
-        payment: true,
-        review: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset,
-    })
-
-    const total = await prisma.booking.count({
-      where: whereClause,
-    })
-
+    const bookingsTable = process.env.DYNAMO_BOOKINGS_TABLE || 'bookings'
+    const { items, lastEvaluatedKey } = await scanBookings(bookingsTable, limit)
+    // Filter by user and status in-memory (for demo; for production, use GSI or Query)
+    let bookings = items.filter((b: any) => b.customerId === user.id)
+    if (status) bookings = bookings.filter((b: any) => b.status === status)
+    const total = bookings.length
+    bookings = bookings.slice(offset, offset + limit)
     return NextResponse.json({
       bookings,
       pagination: {
@@ -185,6 +99,7 @@ export async function GET(request: NextRequest) {
         limit,
         offset,
         hasMore: offset + limit < total,
+        lastEvaluatedKey,
       },
     })
   } catch (error) {

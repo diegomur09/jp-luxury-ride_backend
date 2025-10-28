@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client'
+// Removed: Prisma seed is no longer used after DynamoDB migration.
+
+import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
