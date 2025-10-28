@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getBookingById, createBooking, deleteBookingById, scanBookings } from '@/lib/dynamo'
 import { authMiddleware, requireOwnership } from '@/lib/auth-middleware'
 import { z } from 'zod'
 
@@ -22,39 +22,8 @@ export async function GET(
     const { user } = authResult
     const bookingId = params.id
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        vehicle: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        customer: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            email: true,
-          },
-        },
-        driver: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                phone: true,
-              },
-            },
-          },
-        },
-        stops: {
-          orderBy: { order: 'asc' },
-        },
-        payment: true,
-        review: true,
-      },
-    })
+    const bookingsTable = process.env.DYNAMO_BOOKINGS_TABLE || 'bookings'
+    const booking = await getBookingById(bookingsTable, bookingId)
 
     if (!booking) {
       return NextResponse.json(
@@ -64,11 +33,7 @@ export async function GET(
     }
 
     // Check ownership or admin access
-    const canAccess = await requireOwnership(
-      user.id,
-      booking.customerId,
-      user.role
-    ) || (booking.driverId && user.role === 'DRIVER' && booking.driver?.userId === user.id)
+    const canAccess = (user.id === booking.customerId) || user.role === 'ADMIN' || (booking.driverId && user.role === 'DRIVER')
 
     if (!canAccess) {
       return NextResponse.json(
@@ -101,10 +66,8 @@ export async function PUT(
     const validatedData = updateBookingSchema.parse(body)
 
     // Get existing booking
-    const existingBooking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { driver: true },
-    })
+    const bookingsTable = process.env.DYNAMO_BOOKINGS_TABLE || 'bookings'
+    const existingBooking = await getBookingById(bookingsTable, bookingId)
 
     if (!existingBooking) {
       return NextResponse.json(
@@ -134,40 +97,9 @@ export async function PUT(
     }
 
     // Update booking
-    const updatedBooking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        ...(validatedData.status && { status: validatedData.status }),
-        ...(validatedData.driverId && { driverId: validatedData.driverId }),
-        ...(validatedData.pickupTime && { pickupTime: new Date(validatedData.pickupTime) }),
-        ...(validatedData.dropoffTime && { dropoffTime: new Date(validatedData.dropoffTime) }),
-        ...(validatedData.notes && { notes: validatedData.notes }),
-      },
-      include: {
-        vehicle: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        customer: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        driver: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                phone: true,
-              },
-            },
-          },
-        },
-      },
-    })
-
+    // Update booking in DynamoDB (overwrite with merged fields)
+    const updatedBooking = { ...existingBooking, ...validatedData }
+    await createBooking(bookingsTable, updatedBooking)
     return NextResponse.json({
       message: 'Booking updated successfully',
       booking: updatedBooking,
@@ -200,9 +132,8 @@ export async function DELETE(
     const { user } = authResult
     const bookingId = params.id
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-    })
+    const bookingsTable = process.env.DYNAMO_BOOKINGS_TABLE || 'bookings'
+    const booking = await getBookingById(bookingsTable, bookingId)
 
     if (!booking) {
       return NextResponse.json(
@@ -222,9 +153,7 @@ export async function DELETE(
       )
     }
 
-    await prisma.booking.delete({
-      where: { id: bookingId },
-    })
+    await deleteBookingById(bookingsTable, bookingId)
 
     return NextResponse.json({ message: 'Booking deleted successfully' })
   } catch (error) {
