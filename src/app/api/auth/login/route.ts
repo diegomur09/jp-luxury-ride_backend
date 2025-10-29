@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthRecordByEmail } from '@/lib/dynamo';
 import bcrypt from 'bcryptjs';
-import { generateToken } from '@/lib/auth';
+import jwt from 'jsonwebtoken';
 
 export async function POST(request: Request) {
   try {
@@ -26,7 +26,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const token = generateToken({ email: user.email, role: user.role });
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return NextResponse.json({ error: 'JWT secret not configured' }, { status: 500 });
+    }
+    const token = jwt.sign(
+      { email: user.email, role: user.role },
+      jwtSecret,
+      { expiresIn: '7d' }
+    );
 
     return NextResponse.json({
       token,
