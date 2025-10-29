@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken'
 
 export async function authMiddleware(request: NextRequest) {
   const { user, error } = await getUser(request)
-  
+
   if (error || !user) {
     return NextResponse.json(
       { error: 'Unauthorized - Please login' },
@@ -23,7 +23,7 @@ export async function requireRole(
   allowedRoles: ('CUSTOMER' | 'DRIVER' | 'ADMIN')[]
 ) {
   const authResult = await authMiddleware(request)
-  
+
   if (authResult instanceof NextResponse) {
     return authResult // Return error response
   }
