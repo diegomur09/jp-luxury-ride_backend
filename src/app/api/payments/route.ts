@@ -50,7 +50,28 @@ export async function POST(request: NextRequest) {
     const processingFee = PaymentService.calculateFees(baseAmount, validatedData.provider as PaymentProvider)
     const totalAmount = baseAmount + processingFee
 
-    // Create payment record in DynamoDB
+    // Create payment with provider first
+    const paymentResult = await PaymentService.createPayment({
+      amount: totalAmount,
+      provider: validatedData.provider as PaymentProvider,
+      customerId: user.id,
+      sourceId: validatedData.sourceId,
+      paymentMethodId: validatedData.paymentMethodId,
+      metadata: {
+        bookingId: booking.id,
+        // paymentId will be set after record creation
+      },
+    })
+
+    // Extract provider payment ID
+    let providerPaymentId: string | undefined
+    if (validatedData.provider === 'stripe') {
+      providerPaymentId = paymentResult.data?.id
+    } else if (validatedData.provider === 'square') {
+      providerPaymentId = paymentResult.data?.payment?.id
+    }
+
+    // Create payment record in DynamoDB, persisting provider payment ID
     const paymentsTable = process.env.DYNAMO_PAYMENTS_TABLE || 'payments'
     const payment = await createPayment(paymentsTable, {
       bookingId: booking.id,
@@ -60,21 +81,10 @@ export async function POST(request: NextRequest) {
       processingFee,
       status: 'PENDING',
       currency: 'usd',
+      ...(validatedData.provider === 'stripe' ? { stripePaymentId: providerPaymentId } : {}),
+      ...(validatedData.provider === 'square' ? { squarePaymentId: providerPaymentId } : {}),
     })
 
-    // Create payment with provider (unchanged)
-    const paymentResult = await PaymentService.createPayment({
-      amount: totalAmount,
-      provider: validatedData.provider as PaymentProvider,
-      customerId: user.id,
-      sourceId: validatedData.sourceId,
-      paymentMethodId: validatedData.paymentMethodId,
-      metadata: {
-        bookingId: booking.id,
-        paymentId: payment.id,
-      },
-    })
-    // For demo, skip provider update/delete logic (would require scan/update)
     return NextResponse.json({
       message: 'Payment created successfully',
       payment,

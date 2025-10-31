@@ -1,55 +1,6 @@
-// Payment operations (DynamoDB-backed). These expect a table with PK 'id'.
-export async function createPayment(table: string, payment: any) {
-  const item = { ...payment, id: payment.id || uuidv4(), createdAt: new Date().toISOString() }
-  const cmd = new PutCommand({ TableName: table, Item: item })
-  await getClient().send(cmd)
-  return item
-}
-
-export async function getPaymentById(table: string, id: string) {
-  const cmd = new GetCommand({ TableName: table, Key: { id } })
-  const out = await getClient().send(cmd)
-  return out.Item || null
-}
-
-export async function scanPayments(table: string, limit = 25, exclusiveStartKey?: Record<string, any>) {
-  const cmd = new ScanCommand({ TableName: table, Limit: limit, ExclusiveStartKey: exclusiveStartKey })
-  const out = await getClient().send(cmd)
-  return { items: out.Items || [], lastEvaluatedKey: out.LastEvaluatedKey }
-}
-
-export async function deletePaymentById(table: string, id: string) {
-  const cmd = new DeleteCommand({ TableName: table, Key: { id } })
-  await getClient().send(cmd)
-}
-// Booking operations (DynamoDB-backed). These expect a table with PK 'id'.
 import { v4 as uuidv4 } from 'uuid'
-
-export async function createBooking(table: string, booking: any) {
-  const item = { ...booking, id: booking.id || uuidv4(), createdAt: new Date().toISOString() }
-  const cmd = new PutCommand({ TableName: table, Item: item })
-  await getClient().send(cmd)
-  return item
-}
-
-export async function getBookingById(table: string, id: string) {
-  const cmd = new GetCommand({ TableName: table, Key: { id } })
-  const out = await getClient().send(cmd)
-  return out.Item || null
-}
-
-export async function scanBookings(table: string, limit = 25, exclusiveStartKey?: Record<string, any>) {
-  const cmd = new ScanCommand({ TableName: table, Limit: limit, ExclusiveStartKey: exclusiveStartKey })
-  const out = await getClient().send(cmd)
-  return { items: out.Items || [], lastEvaluatedKey: out.LastEvaluatedKey }
-}
-
-export async function deleteBookingById(table: string, id: string) {
-  const cmd = new DeleteCommand({ TableName: table, Key: { id } })
-  await getClient().send(cmd)
-}
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import fs from 'fs'
 import path from 'path'
 import { promisify } from 'util'
@@ -99,20 +50,30 @@ export async function getAuthRecordByEmail(table: string | undefined, email: str
     const store = await readAuthStore()
     return store[email] || null
   }
-  const cmd = new GetCommand({ TableName: table, Key: { email } })
+  // Use GSI for efficient email lookup
+  const cmd = new QueryCommand({
+    TableName: table,
+    IndexName: 'email-index',
+    KeyConditionExpression: '#email = :email',
+    ExpressionAttributeNames: { '#email': 'email' },
+    ExpressionAttributeValues: { ':email': email },
+    Limit: 1,
+  })
   const out = await getClient().send(cmd)
-  return out.Item || null
+  return (out.Items && out.Items[0]) || null
 }
 
 export async function putAuthRecord(table: string | undefined, record: any) {
   if (!table) {
     // dev fallback to file
     const store = await readAuthStore()
-    store[record.email] = record
+    const item = { id: record.id || uuidv4(), ...record }
+    store[item.email] = item
     await writeAuthStore(store)
     return
   }
-  const cmd = new PutCommand({ TableName: table, Item: record })
+  const item = { id: record.id || uuidv4(), ...record }
+  const cmd = new PutCommand({ TableName: table, Item: item })
   await getClient().send(cmd)
 }
 
@@ -143,4 +104,55 @@ export async function scanUsers(table: string, limit = 25, exclusiveStartKey?: R
   const cmd = new ScanCommand({ TableName: table, Limit: limit, ExclusiveStartKey: exclusiveStartKey })
   const out = await getClient().send(cmd)
   return { items: out.Items || [], lastEvaluatedKey: out.LastEvaluatedKey }
+}
+
+// Payment operations (DynamoDB-backed). These expect a table with PK 'id'.
+export async function createPayment(table: string, payment: any) {
+  // Accept and persist provider payment IDs if present
+  const item = { ...payment, id: payment.id || uuidv4(), createdAt: new Date().toISOString() }
+  const cmd = new PutCommand({ TableName: table, Item: item })
+  await getClient().send(cmd)
+  return item
+}
+
+export async function getPaymentById(table: string, id: string) {
+  const cmd = new GetCommand({ TableName: table, Key: { id } })
+  const out = await getClient().send(cmd)
+  return out.Item || null
+}
+
+export async function scanPayments(table: string, limit = 25, exclusiveStartKey?: Record<string, any>) {
+  const cmd = new ScanCommand({ TableName: table, Limit: limit, ExclusiveStartKey: exclusiveStartKey })
+  const out = await getClient().send(cmd)
+  return { items: out.Items || [], lastEvaluatedKey: out.LastEvaluatedKey }
+}
+
+export async function deletePaymentById(table: string, id: string) {
+  const cmd = new DeleteCommand({ TableName: table, Key: { id } })
+  await getClient().send(cmd)
+}
+
+// Booking operations (DynamoDB-backed). These expect a table with PK 'id'.
+export async function createBooking(table: string, booking: any) {
+  const item = { ...booking, id: booking.id || uuidv4(), createdAt: new Date().toISOString() }
+  const cmd = new PutCommand({ TableName: table, Item: item })
+  await getClient().send(cmd)
+  return item
+}
+
+export async function getBookingById(table: string, id: string) {
+  const cmd = new GetCommand({ TableName: table, Key: { id } })
+  const out = await getClient().send(cmd)
+  return out.Item || null
+}
+
+export async function scanBookings(table: string, limit = 25, exclusiveStartKey?: Record<string, any>) {
+  const cmd = new ScanCommand({ TableName: table, Limit: limit, ExclusiveStartKey: exclusiveStartKey })
+  const out = await getClient().send(cmd)
+  return { items: out.Items || [], lastEvaluatedKey: out.LastEvaluatedKey }
+}
+
+export async function deleteBookingById(table: string, id: string) {
+  const cmd = new DeleteCommand({ TableName: table, Key: { id } })
+  await getClient().send(cmd)
 }
