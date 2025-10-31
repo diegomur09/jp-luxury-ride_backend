@@ -157,7 +157,7 @@ Resources:
       DBInstanceIdentifier: !Sub "${Environment}-lux-ride-db"
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: "15.4"
+      EngineVersion: "15.3"
       MasterUsername: luxride_admin
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${Environment}/lux-ride/db:SecretString:password}}"
       AllocatedStorage: 20
