@@ -1,4 +1,87 @@
-  # DynamoDB Tables
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "JP Luxury Ride - Complete AWS Infrastructure"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues: ["dev", "staging", "prod"]
+    Description: "Environment name"
+
+  DomainName:
+    Type: String
+    Default: "luxride.com"
+    Description: "Domain name for the application"
+
+Resources:
+  # ---------------- VPC & Networking ----------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-vpc"
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-private-az1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-private-az2"
+
+  # Security groups
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for RDS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-rds-sg"
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for Lambdas / app
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-lambda-sg"
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Redis cluster
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-redis-sg"
+
+  # ---------------- DynamoDB ----------------
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -46,46 +129,8 @@
         - AttributeName: id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-# AWS Infrastructure as Code (CloudFormation)
 
-# Complete infrastructure template for JP Luxury Ride
-
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "JP Luxury Ride - Complete AWS Infrastructure"
-
-Parameters:
-  Environment:
-    Type: String
-    Default: "dev"
-    AllowedValues: ["dev", "staging", "prod"]
-    Description: "Environment name"
-
-  DomainName:
-    Type: String
-    Default: "luxride.com"
-    Description: "Domain name for the application"
-
-Resources:
-  # VPC Configuration
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Redis cluster
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-redis-sg"
-
-  # RDS Database
+  # ---------------- RDS ----------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -115,11 +160,12 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       StorageEncrypted: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub "${Environment}-lux-ride-db"
 
-  # ElastiCache Redis
+  # ---------------- Redis (ElastiCache) ----------------
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
@@ -128,21 +174,8 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
-  RedisCluster:
-    Type: AWS::ElastiCache::CacheCluster
-    Properties:
-      CacheClusterId: !Sub "${Environment}-lux-ride-redis"
-      CacheNodeType: cache.t3.micro
-      Engine: redis
-      NumCacheNodes: 1
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      VpcSecurityGroupIds:
-        - !Ref RedisSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-lux-ride-redis"
 
-  # S3 Bucket for uploads
+  # ---------------- S3 ----------------
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -164,37 +197,64 @@ Resources:
     Properties:
       Bucket: !Ref S3Bucket
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Sid: PublicReadGetObject
             Effect: Allow
             Principal: "*"
-            Action: s3:GetObject
-            Resource: !Sub "${S3Bucket}/*"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
 
-  # Lambda Execution Role
+  # ---------------- IAM (Lambda Execution Role stub) ----------------
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-lambda-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-lambda-role"
 
-  # API Gateway
+  # ---------------- Secrets Manager ----------------
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}/lux-ride/db"
+      Description: "Database credentials for Lux Ride"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"luxride_admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: "\"@/'\\"
+
+  StripeSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}/lux-ride/stripe"
+      Description: "Stripe API credentials"
+      SecretString: !Sub |
+        {
+          "secret_key": "sk_test_your_stripe_secret_key_here",
+          "webhook_secret": "whsec_your_webhook_secret_here"
+        }
+
+  # ---------------- API Gateway ----------------
   RestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub "${Environment}-lux-ride-api"
       Description: "JP Luxury Ride API"
       EndpointConfiguration:
-        Types:
-          - REGIONAL
+        Types: [REGIONAL]
 
-  # API Gateway Deployment
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - AuthResource
-      - BookingsResource
-      - PaymentsResource
-    Properties:
-      RestApiId: !Ref RestApi
-      StageName: !Ref Environment
-
-  # API Resources
   AuthResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -216,7 +276,6 @@ Resources:
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: payments
 
-  # API Gateway Methods (at least one per resource)
   AuthPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -226,6 +285,8 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
 
   BookingsPostMethod:
     Type: AWS::ApiGateway::Method
@@ -236,6 +297,8 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
 
   PaymentsPostMethod:
     Type: AWS::ApiGateway::Method
@@ -246,31 +309,19 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
 
-  # Secrets Manager
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - AuthPostMethod
+      - BookingsPostMethod
+      - PaymentsPostMethod
     Properties:
-      Name: !Sub "${Environment}/lux-ride/db"
-      Description: "Database credentials for Lux Ride"
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "luxride_admin"}'
-        GenerateStringKey: "password"
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+      RestApiId: !Ref RestApi
+      StageName: !Ref Environment
 
-  StripeSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "${Environment}/lux-ride/stripe"
-      Description: "Stripe API credentials"
-      SecretString: !Sub |
-        {
-          "secret_key": "sk_test_your_stripe_secret_key_here",
-          "webhook_secret": "whsec_your_webhook_secret_here"
-        }
-
-  # CloudWatch Log Groups
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -307,7 +358,6 @@ Outputs:
     Value: !Ref DriversTable
     Export:
       Name: !Sub "${Environment}-Drivers-Table"
-
 
   S3BucketName:
     Description: "S3 Bucket Name"
