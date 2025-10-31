@@ -54,19 +54,6 @@ Resources:
         - Key: Name
           Value: !Sub "${Environment}-lambda-sg"
 
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Redis cluster
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-redis-sg"
 
   # ---------------- DynamoDB ----------------
   UsersTable:
@@ -127,14 +114,6 @@ Resources:
       BillingMode: PAY_PER_REQUEST
 
 
-  # ---------------- Redis (ElastiCache) ----------------
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: Subnet group for Redis cluster
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
 
   # ---------------- S3 ----------------
   S3Bucket:
